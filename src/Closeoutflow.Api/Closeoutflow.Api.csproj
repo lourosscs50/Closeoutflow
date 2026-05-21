@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Closeoutflow.Shared\Closeoutflow.Shared.csproj" />
+    <ProjectReference Include="..\Closeoutflow.Modules.Jobs\Closeoutflow.Modules.Jobs.csproj" />
+    <ProjectReference Include="..\Closeoutflow.Modules.Closeouts\Closeoutflow.Modules.Closeouts.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Closeoutflow.Api/Closeoutflow.Api.csproj" />
+    <Project Path="src/Closeoutflow.Modules.Closeouts/Closeoutflow.Modules.Closeouts.csproj" />
+    <Project Path="src/Closeoutflow.Modules.Jobs/Closeoutflow.Modules.Jobs.csproj" />
+    <Project Path="src/Closeoutflow.Shared/Closeoutflow.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Closeoutflow.Api.Tests/Closeoutflow.Api.Tests.csproj" />
+    <Project Path="tests/Closeoutflow.Architecture.Tests/Closeoutflow.Architecture.Tests.csproj" />
+    <Project Path="tests/Closeoutflow.Modules.Closeouts.Tests/Closeoutflow.Modules.Closeouts.Tests.csproj" />
+    <Project Path="tests/Closeoutflow.Modules.Jobs.Tests/Closeoutflow.Modules.Jobs.Tests.csproj" />
+  </Folder>
+</Solution>
