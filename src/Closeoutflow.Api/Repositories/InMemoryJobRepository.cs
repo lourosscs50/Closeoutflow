@@ -13,12 +13,25 @@ public sealed class InMemoryJobRepository : IJobRepository
 
     public Task AddAsync(Job job, CancellationToken cancellationToken = default)
     {
+        if (_jobs.Any(x => x.Id == job.Id))
+        {
+            throw new InvalidOperationException($"A job with id '{job.Id}' already exists.");
+        }
+
         _jobs.Add(job);
+
         return Task.CompletedTask;
     }
 
     public Task UpdateAsync(Job job, CancellationToken cancellationToken = default)
     {
+        var existingJob = _jobs.SingleOrDefault(x => x.Id == job.Id);
+
+        if (existingJob is null)
+        {
+            throw new InvalidOperationException($"A job with id '{job.Id}' does not exist.");
+        }
+
         return Task.CompletedTask;
     }
 }

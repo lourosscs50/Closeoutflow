@@ -122,4 +122,43 @@ public class JobTests
         Assert.True(pendingResult.IsFailure);
         Assert.Equal(JobStatus.Closed, job.Status);
     }
+
+    [Fact]
+    public void Create_Should_Trim_Title_When_Title_Has_Extra_Whitespace()
+    {
+        var createdAtUtc = new DateTime(2026, 4, 17, 12, 0, 0, DateTimeKind.Utc);
+
+        var result = Job.Create("   Replace rooftop unit   ", createdAtUtc);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Replace rooftop unit", result.Value.Title);
+    }
+
+    [Fact]
+    public void Failed_Start_Should_Not_Overwrite_Original_StartedAtUtc()
+    {
+        var job = Job.Create("Replace rooftop unit", DateTime.UtcNow).Value;
+        var firstStartedAtUtc = new DateTime(2026, 4, 17, 12, 30, 0, DateTimeKind.Utc);
+        var secondStartedAtUtc = firstStartedAtUtc.AddMinutes(15);
+
+        job.Start(firstStartedAtUtc);
+        var result = job.Start(secondStartedAtUtc);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(JobStatus.InProgress, job.Status);
+        Assert.Equal(firstStartedAtUtc, job.StartedAtUtc);
+    }
+
+    [Fact]
+    public void Failed_Close_Should_Not_Set_ClosedAtUtc()
+    {
+        var job = Job.Create("Replace rooftop unit", DateTime.UtcNow).Value;
+
+        var result = job.Close(new DateTime(2026, 4, 17, 13, 30, 0, DateTimeKind.Utc));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(JobStatus.New, job.Status);
+        Assert.Null(job.ClosedAtUtc);
+    }
+
 }

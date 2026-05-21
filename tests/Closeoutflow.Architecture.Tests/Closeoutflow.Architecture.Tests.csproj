@@ -18,4 +18,11 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Closeoutflow.Shared\Closeoutflow.Shared.csproj" />
+    <ProjectReference Include="..\..\src\Closeoutflow.Modules.Jobs\Closeoutflow.Modules.Jobs.csproj" />
+    <ProjectReference Include="..\..\src\Closeoutflow.Modules.Closeouts\Closeoutflow.Modules.Closeouts.csproj" />
+    <ProjectReference Include="..\..\src\Closeoutflow.Api\Closeoutflow.Api.csproj" />
+  </ItemGroup>
+
 </Project>
