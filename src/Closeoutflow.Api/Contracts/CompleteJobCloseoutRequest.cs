@@ -5,7 +5,7 @@ namespace Closeoutflow.Api.Contracts;
 public sealed class CompleteJobCloseoutRequest
 {
     public string Summary { get; init; } = string.Empty;
-    public List<ProofItemRequest> ProofItems { get; init; } = new();
+    public List<ProofItemRequest>? ProofItems { get; init; } = new();
 }
 
 public sealed class ProofItemRequest

@@ -145,11 +145,11 @@ app.MapPost("/jobs/{id:guid}/closeout", async (
     CancellationToken cancellationToken) =>
 {
     var command = new CompleteJobCloseoutCommand(
-        id,
-        request.Summary,
-        request.ProofItems
-            .Select(x => (x.Type, x.Value))
-            .ToArray());
+    id,
+    request.Summary,
+    request.ProofItems?
+        .Select(x => (x.Type, x.Value))
+        .ToArray() ?? Array.Empty<(ProofItemType Type, string Value)>());
 
     var result = await handler.HandleAsync(command, cancellationToken);
 
