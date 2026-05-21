@@ -106,4 +106,52 @@ public class CloseoutRecordTests
         Assert.Equal(ProofItemType.Signature, proofItem.Type);
         Assert.Equal("Signed by customer", proofItem.Value);
     }
+
+    [Fact]
+    public void Create_Should_Fail_When_Proof_Items_Are_Null()
+    {
+        var result = CloseoutRecord.Create(
+            Guid.NewGuid(),
+            "Done",
+            null!,
+            DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CloseoutErrors.ProofRequired, result.Error);
+    }
+
+    [Fact]
+    public void Create_Should_Trim_Proof_Item_Value()
+    {
+        var result = CloseoutRecord.Create(
+            Guid.NewGuid(),
+            "Done",
+            new[]
+            {
+                (ProofItemType.Note, "   Completed work   ")
+            },
+            DateTime.UtcNow);
+
+        Assert.True(result.IsSuccess);
+
+        var proofItem = result.Value.ProofItems.Single();
+        Assert.Equal("Completed work", proofItem.Value);
+    }
+
+    [Fact]
+    public void Create_Should_Allow_Empty_Summary()
+    {
+        var result = CloseoutRecord.Create(
+            Guid.NewGuid(),
+            "   ",
+            new[]
+            {
+                (ProofItemType.Note, "Completed work")
+            },
+            DateTime.UtcNow);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(string.Empty, result.Value.Summary);
+    }
+
 }

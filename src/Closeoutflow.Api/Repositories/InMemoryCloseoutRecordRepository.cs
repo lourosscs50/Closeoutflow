@@ -8,7 +8,13 @@ public sealed class InMemoryCloseoutRecordRepository : ICloseoutRecordRepository
 
     public Task AddAsync(CloseoutRecord closeoutRecord, CancellationToken cancellationToken = default)
     {
+        if (_items.Any(x => x.Id == closeoutRecord.Id))
+        {
+            throw new InvalidOperationException($"A closeout record with id '{closeoutRecord.Id}' already exists.");
+        }
+
         _items.Add(closeoutRecord);
+
         return Task.CompletedTask;
     }
 

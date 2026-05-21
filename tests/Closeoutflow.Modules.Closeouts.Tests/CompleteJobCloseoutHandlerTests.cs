@@ -59,9 +59,11 @@ public class CompleteJobCloseoutHandlerTests
         var jobRepository = new FakeJobRepository();
         await jobRepository.AddAsync(job);
 
+        var closeoutRepository = new FakeCloseoutRecordRepository();
+
         var handler = new CompleteJobCloseoutHandler(
             jobRepository,
-            new FakeCloseoutRecordRepository(),
+            closeoutRepository,
             new FakeDateTimeProvider(new DateTime(2026, 4, 18, 15, 0, 0, DateTimeKind.Utc)));
 
         var command = new CompleteJobCloseoutCommand(
@@ -73,6 +75,9 @@ public class CompleteJobCloseoutHandlerTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(CloseoutErrors.ProofValueRequired, result.Error);
+        Assert.Equal(JobStatus.PendingCloseout, job.Status);
+        Assert.Null(job.ClosedAtUtc);
+        Assert.Empty(closeoutRepository.Items);
     }
 
     [Fact]
@@ -115,6 +120,37 @@ public class CompleteJobCloseoutHandlerTests
         Assert.Single(closeoutRepository.Items);
         Assert.Equal(job.Id, closeoutRepository.Items.Single().JobId);
     }
+    [Fact]
+    public async Task HandleAsync_Should_Fail_When_Proof_Items_Are_Null()
+    {
+        var job = Job.Create("Replace rooftop unit", DateTime.UtcNow).Value;
+        job.Start(DateTime.UtcNow);
+        job.MarkPendingCloseout(DateTime.UtcNow);
+
+        var jobRepository = new FakeJobRepository();
+        await jobRepository.AddAsync(job);
+
+        var closeoutRepository = new FakeCloseoutRecordRepository();
+
+        var handler = new CompleteJobCloseoutHandler(
+            jobRepository,
+            closeoutRepository,
+            new FakeDateTimeProvider(new DateTime(2026, 4, 18, 15, 0, 0, DateTimeKind.Utc)));
+
+        var command = new CompleteJobCloseoutCommand(
+            job.Id,
+            "Completed work",
+            null!);
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CloseoutErrors.ProofRequired, result.Error);
+        Assert.Equal(JobStatus.PendingCloseout, job.Status);
+        Assert.Null(job.ClosedAtUtc);
+        Assert.Empty(closeoutRepository.Items);
+    }
+
 }
 
 internal sealed class FakeJobRepository : IJobRepository
