@@ -13,6 +13,45 @@ public class CloseoutWorkflowTests : IClassFixture<WebApplicationFactory<Program
         _factory = factory;
     }
 
+
+    [Fact]
+    public async Task Create_Job_Should_Use_Requested_Title()
+    {
+        var client = _factory.CreateClient();
+
+        var createResponse = await client.PostAsJsonAsync(
+            "/jobs",
+            new CreateJobRequest("  Replace rooftop unit  "));
+
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var createBody = await createResponse.Content.ReadFromJsonAsync<CreateJobResponse>();
+        Assert.NotNull(createBody);
+        Assert.NotEqual(Guid.Empty, createBody!.JobId);
+        Assert.Equal("Replace rooftop unit", createBody.Title);
+        Assert.Equal("New", createBody.Status);
+
+        var jobReadBody = await ReadJobAsync(client, createBody.JobId);
+        Assert.Equal("Replace rooftop unit", jobReadBody.Title);
+        Assert.Equal("New", jobReadBody.Status);
+    }
+
+    [Fact]
+    public async Task Create_Job_Should_Return_BadRequest_When_Title_Is_Blank()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/jobs",
+            new CreateJobRequest("   "));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var errorBody = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+        Assert.NotNull(errorBody);
+        Assert.Equal("Jobs.TitleRequired", errorBody!.Error);
+    }
+
     [Fact]
     public async Task Full_Closeout_Workflow_Should_Succeed()
     {
@@ -250,7 +289,9 @@ public class CloseoutWorkflowTests : IClassFixture<WebApplicationFactory<Program
 
     private static async Task<CreateJobResponse> CreateJobAsync(HttpClient client)
     {
-        var createResponse = await client.PostAsync("/jobs", null);
+        var createResponse = await client.PostAsJsonAsync(
+            "/jobs",
+            new CreateJobRequest("Replace rooftop unit"));
 
         Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
 
@@ -258,6 +299,7 @@ public class CloseoutWorkflowTests : IClassFixture<WebApplicationFactory<Program
 
         Assert.NotNull(createBody);
         Assert.NotEqual(Guid.Empty, createBody!.JobId);
+        Assert.Equal("Replace rooftop unit", createBody.Title);
         Assert.Equal("New", createBody.Status);
 
         return createBody;
@@ -288,7 +330,9 @@ public class CloseoutWorkflowTests : IClassFixture<WebApplicationFactory<Program
         return body!;
     }
 
-    private sealed record CreateJobResponse(Guid JobId, string Status);
+    private sealed record CreateJobRequest(string Title);
+
+    private sealed record CreateJobResponse(Guid JobId, string Title, string Status);
 
     private sealed record CompleteJobCloseoutResponse(Guid CloseoutRecordId, Guid JobId, string JobStatus);
 

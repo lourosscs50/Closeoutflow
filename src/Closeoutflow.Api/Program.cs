@@ -24,11 +24,12 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapPost("/jobs", async (
+    CreateJobRequest request,
     IJobRepository jobRepository,
     IDateTimeProvider dateTimeProvider,
     CancellationToken cancellationToken) =>
 {
-    var createResult = Job.Create("Demo job", dateTimeProvider.UtcNow);
+    var createResult = Job.Create(request.Title, dateTimeProvider.UtcNow);
 
     if (createResult.IsFailure)
     {
@@ -44,6 +45,7 @@ app.MapPost("/jobs", async (
     return Results.Ok(new
     {
         jobId = createResult.Value.Id,
+        title = createResult.Value.Title,
         status = createResult.Value.Status.ToString()
     });
 });
@@ -145,11 +147,11 @@ app.MapPost("/jobs/{id:guid}/closeout", async (
     CancellationToken cancellationToken) =>
 {
     var command = new CompleteJobCloseoutCommand(
-    id,
-    request.Summary,
-    request.ProofItems?
-        .Select(x => (x.Type, x.Value))
-        .ToArray() ?? Array.Empty<(ProofItemType Type, string Value)>());
+        id,
+        request.Summary,
+        request.ProofItems?
+            .Select(x => (x.Type, x.Value))
+            .ToArray() ?? Array.Empty<(ProofItemType Type, string Value)>());
 
     var result = await handler.HandleAsync(command, cancellationToken);
 
