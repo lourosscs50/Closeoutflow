@@ -188,6 +188,27 @@ internal sealed class FakeCloseoutRecordRepository : ICloseoutRecordRepository
     {
         return Task.FromResult(Items.SingleOrDefault(x => x.Id == closeoutRecordId));
     }
+
+    public Task<IReadOnlyCollection<CloseoutRecord>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<CloseoutRecord> records = Items
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToArray();
+
+        return Task.FromResult(records);
+    }
+
+    public Task<IReadOnlyCollection<CloseoutRecord>> ListByJobIdAsync(
+        Guid jobId,
+        CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<CloseoutRecord> records = Items
+            .Where(x => x.JobId == jobId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToArray();
+
+        return Task.FromResult(records);
+    }
 }
 
 internal sealed class FakeDateTimeProvider : IDateTimeProvider

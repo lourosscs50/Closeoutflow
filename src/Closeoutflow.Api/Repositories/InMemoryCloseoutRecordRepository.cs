@@ -22,4 +22,25 @@ public sealed class InMemoryCloseoutRecordRepository : ICloseoutRecordRepository
     {
         return Task.FromResult(_items.SingleOrDefault(x => x.Id == closeoutRecordId));
     }
+
+    public Task<IReadOnlyCollection<CloseoutRecord>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<CloseoutRecord> records = _items
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToArray();
+
+        return Task.FromResult(records);
+    }
+
+    public Task<IReadOnlyCollection<CloseoutRecord>> ListByJobIdAsync(
+        Guid jobId,
+        CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<CloseoutRecord> records = _items
+            .Where(x => x.JobId == jobId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToArray();
+
+        return Task.FromResult(records);
+    }
 }

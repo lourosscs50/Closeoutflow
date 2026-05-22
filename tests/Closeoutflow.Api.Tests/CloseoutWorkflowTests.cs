@@ -287,6 +287,66 @@ public class CloseoutWorkflowTests : IClassFixture<WebApplicationFactory<Program
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+
+    [Fact]
+    public async Task Get_Closeouts_Should_Return_Created_Closeout_Records()
+    {
+        var client = _factory.CreateClient();
+        var createBody = await MoveJobToPendingCloseoutAsync(client);
+
+        var closeoutBody = await CompleteCloseoutAsync(
+            client,
+            createBody.JobId,
+            "Completed rooftop unit replacement");
+
+        var response = await client.GetAsync("/closeouts");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<CloseoutReadResponse[]>();
+        Assert.NotNull(body);
+        Assert.Contains(body!, x => x.CloseoutRecordId == closeoutBody.CloseoutRecordId);
+    }
+
+    [Fact]
+    public async Task Get_Job_Closeouts_Should_Return_Only_Closeouts_For_Requested_Job()
+    {
+        var client = _factory.CreateClient();
+
+        var firstJob = await MoveJobToPendingCloseoutAsync(client);
+        var secondJob = await MoveJobToPendingCloseoutAsync(client);
+
+        var firstCloseout = await CompleteCloseoutAsync(
+            client,
+            firstJob.JobId,
+            "First job closeout");
+
+        var secondCloseout = await CompleteCloseoutAsync(
+            client,
+            secondJob.JobId,
+            "Second job closeout");
+
+        var response = await client.GetAsync($"/jobs/{firstJob.JobId}/closeouts");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<CloseoutReadResponse[]>();
+        Assert.NotNull(body);
+
+        Assert.Contains(body!, x => x.CloseoutRecordId == firstCloseout.CloseoutRecordId);
+        Assert.DoesNotContain(body!, x => x.CloseoutRecordId == secondCloseout.CloseoutRecordId);
+    }
+
+    [Fact]
+    public async Task Get_Job_Closeouts_Should_Return_NotFound_When_Job_Does_Not_Exist()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/jobs/{Guid.NewGuid()}/closeouts");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private static async Task<CreateJobResponse> CreateJobAsync(HttpClient client)
     {
         var createResponse = await client.PostAsJsonAsync(
@@ -316,6 +376,32 @@ public class CloseoutWorkflowTests : IClassFixture<WebApplicationFactory<Program
         Assert.Equal(HttpStatusCode.OK, pendingResponse.StatusCode);
 
         return createBody;
+    }
+
+
+    private static async Task<CompleteJobCloseoutResponse> CompleteCloseoutAsync(
+        HttpClient client,
+        Guid jobId,
+        string summary)
+    {
+        var closeoutResponse = await client.PostAsJsonAsync(
+            $"/jobs/{jobId}/closeout",
+            new CompleteJobCloseoutRequest(
+                summary,
+                new[]
+                {
+                    new ProofItemRequest(0, "Work completed successfully")
+                }));
+
+        Assert.Equal(HttpStatusCode.OK, closeoutResponse.StatusCode);
+
+        var closeoutBody = await closeoutResponse.Content.ReadFromJsonAsync<CompleteJobCloseoutResponse>();
+
+        Assert.NotNull(closeoutBody);
+        Assert.Equal(jobId, closeoutBody!.JobId);
+        Assert.Equal("Closed", closeoutBody.JobStatus);
+
+        return closeoutBody;
     }
 
     private static async Task<JobReadResponse> ReadJobAsync(HttpClient client, Guid jobId)

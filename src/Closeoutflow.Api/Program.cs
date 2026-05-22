@@ -172,6 +172,34 @@ app.MapPost("/jobs/{id:guid}/closeout", async (
     });
 });
 
+
+app.MapGet("/closeouts", async (
+    ICloseoutRecordRepository closeoutRecordRepository,
+    CancellationToken cancellationToken) =>
+{
+    var closeouts = await closeoutRecordRepository.ListAsync(cancellationToken);
+
+    return Results.Ok(closeouts.Select(ToCloseoutReadModel));
+});
+
+app.MapGet("/jobs/{id:guid}/closeouts", async (
+    Guid id,
+    IJobRepository jobRepository,
+    ICloseoutRecordRepository closeoutRecordRepository,
+    CancellationToken cancellationToken) =>
+{
+    var job = await jobRepository.GetByIdAsync(id, cancellationToken);
+
+    if (job is null)
+    {
+        return Results.NotFound();
+    }
+
+    var closeouts = await closeoutRecordRepository.ListByJobIdAsync(id, cancellationToken);
+
+    return Results.Ok(closeouts.Select(ToCloseoutReadModel));
+});
+
 app.MapGet("/closeouts/{id:guid}", async (
     Guid id,
     ICloseoutRecordRepository closeoutRecordRepository,
@@ -184,7 +212,13 @@ app.MapGet("/closeouts/{id:guid}", async (
         return Results.NotFound();
     }
 
-    return Results.Ok(new
+    return Results.Ok(ToCloseoutReadModel(closeout));
+});
+
+
+static object ToCloseoutReadModel(CloseoutRecord closeout)
+{
+    return new
     {
         closeoutRecordId = closeout.Id,
         jobId = closeout.JobId,
@@ -197,8 +231,8 @@ app.MapGet("/closeouts/{id:guid}", async (
             value = x.Value,
             createdAtUtc = x.CreatedAtUtc
         })
-    });
-});
+    };
+}
 
 app.Run();
 
