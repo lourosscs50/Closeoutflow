@@ -136,6 +136,26 @@ public class CloseoutWorkflowTests : IClassFixture<WebApplicationFactory<Program
         Assert.Equal(2, closeoutReadBody.ProofItems.Length);
     }
 
+
+    [Fact]
+    public async Task Get_Jobs_Should_Return_Created_Jobs()
+    {
+        var client = _factory.CreateClient();
+
+        var firstJob = await CreateJobAsync(client, "Replace rooftop unit");
+        var secondJob = await CreateJobAsync(client, "Install condenser");
+
+        var response = await client.GetAsync("/jobs");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JobReadResponse[]>();
+        Assert.NotNull(body);
+
+        Assert.Contains(body!, x => x.JobId == firstJob.JobId && x.Title == "Replace rooftop unit");
+        Assert.Contains(body!, x => x.JobId == secondJob.JobId && x.Title == "Install condenser");
+    }
+
     [Fact]
     public async Task Get_Job_Should_Return_NotFound_When_Job_Does_Not_Exist()
     {
@@ -347,11 +367,16 @@ public class CloseoutWorkflowTests : IClassFixture<WebApplicationFactory<Program
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static async Task<CreateJobResponse> CreateJobAsync(HttpClient client)
+    private static Task<CreateJobResponse> CreateJobAsync(HttpClient client)
+    {
+        return CreateJobAsync(client, "Replace rooftop unit");
+    }
+
+    private static async Task<CreateJobResponse> CreateJobAsync(HttpClient client, string title)
     {
         var createResponse = await client.PostAsJsonAsync(
             "/jobs",
-            new CreateJobRequest("Replace rooftop unit"));
+            new CreateJobRequest(title));
 
         Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
 
@@ -359,7 +384,7 @@ public class CloseoutWorkflowTests : IClassFixture<WebApplicationFactory<Program
 
         Assert.NotNull(createBody);
         Assert.NotEqual(Guid.Empty, createBody!.JobId);
-        Assert.Equal("Replace rooftop unit", createBody.Title);
+        Assert.Equal(title.Trim(), createBody.Title);
         Assert.Equal("New", createBody.Status);
 
         return createBody;

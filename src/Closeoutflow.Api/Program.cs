@@ -50,6 +50,16 @@ app.MapPost("/jobs", async (
     });
 });
 
+
+app.MapGet("/jobs", async (
+    IJobRepository jobRepository,
+    CancellationToken cancellationToken) =>
+{
+    var jobs = await jobRepository.ListAsync(cancellationToken);
+
+    return Results.Ok(jobs.Select(ToJobReadModel));
+});
+
 app.MapGet("/jobs/{id:guid}", async (
     Guid id,
     IJobRepository jobRepository,
@@ -62,16 +72,7 @@ app.MapGet("/jobs/{id:guid}", async (
         return Results.NotFound();
     }
 
-    return Results.Ok(new
-    {
-        jobId = job.Id,
-        title = job.Title,
-        status = job.Status.ToString(),
-        createdAtUtc = job.CreatedAtUtc,
-        startedAtUtc = job.StartedAtUtc,
-        pendingCloseoutAtUtc = job.PendingCloseoutAtUtc,
-        closedAtUtc = job.ClosedAtUtc
-    });
+    return Results.Ok(ToJobReadModel(job));
 });
 
 app.MapPost("/jobs/{id:guid}/start", async (
@@ -215,6 +216,21 @@ app.MapGet("/closeouts/{id:guid}", async (
     return Results.Ok(ToCloseoutReadModel(closeout));
 });
 
+
+
+static object ToJobReadModel(Job job)
+{
+    return new
+    {
+        jobId = job.Id,
+        title = job.Title,
+        status = job.Status.ToString(),
+        createdAtUtc = job.CreatedAtUtc,
+        startedAtUtc = job.StartedAtUtc,
+        pendingCloseoutAtUtc = job.PendingCloseoutAtUtc,
+        closedAtUtc = job.ClosedAtUtc
+    };
+}
 
 static object ToCloseoutReadModel(CloseoutRecord closeout)
 {

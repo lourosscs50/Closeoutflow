@@ -11,6 +11,15 @@ public sealed class InMemoryJobRepository : IJobRepository
         return Task.FromResult(_jobs.SingleOrDefault(x => x.Id == jobId));
     }
 
+    public Task<IReadOnlyCollection<Job>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<Job> jobs = _jobs
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToArray();
+
+        return Task.FromResult(jobs);
+    }
+
     public Task AddAsync(Job job, CancellationToken cancellationToken = default)
     {
         if (_jobs.Any(x => x.Id == job.Id))

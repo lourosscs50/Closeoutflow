@@ -72,10 +72,50 @@ public sealed class InMemoryJobRepositoryTests
         Assert.Equal(JobStatus.InProgress, savedJob.Status);
     }
 
+
+    [Fact]
+    public async Task ListAsync_Should_Return_Jobs_Ordered_Newest_First()
+    {
+        var repository = new InMemoryJobRepository();
+
+        var olderJob = CreateJob(
+            "Older job",
+            new DateTime(2026, 4, 17, 12, 0, 0, DateTimeKind.Utc));
+
+        var newerJob = CreateJob(
+            "Newer job",
+            new DateTime(2026, 4, 17, 13, 0, 0, DateTimeKind.Utc));
+
+        await repository.AddAsync(olderJob);
+        await repository.AddAsync(newerJob);
+
+        var jobs = await repository.ListAsync();
+
+        Assert.Collection(
+            jobs,
+            first => Assert.Same(newerJob, first),
+            second => Assert.Same(olderJob, second));
+    }
+
+    [Fact]
+    public async Task ListAsync_Should_Return_Empty_Collection_When_No_Jobs_Exist()
+    {
+        var repository = new InMemoryJobRepository();
+
+        var jobs = await repository.ListAsync();
+
+        Assert.Empty(jobs);
+    }
+
     private static Job CreateJob()
     {
-        return Job.Create(
+        return CreateJob(
             "Replace rooftop unit",
-            new DateTime(2026, 4, 17, 12, 0, 0, DateTimeKind.Utc)).Value;
+            new DateTime(2026, 4, 17, 12, 0, 0, DateTimeKind.Utc));
+    }
+
+    private static Job CreateJob(string title, DateTime createdAtUtc)
+    {
+        return Job.Create(title, createdAtUtc).Value;
     }
 }
