@@ -19,3 +19,9 @@ coverage/
 
 # Logs
 *.log
+
+# Local scratch files
+.scratch/
+
+# Local scratch files
+.scratch/
