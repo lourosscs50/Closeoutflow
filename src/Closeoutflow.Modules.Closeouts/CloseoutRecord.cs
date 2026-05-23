@@ -61,4 +61,36 @@ public sealed class CloseoutRecord
                 createdAtUtc,
                 createdProofItems));
     }
+
+    public static CloseoutRecord Rehydrate(
+        Guid id,
+        Guid jobId,
+        string summary,
+        DateTime createdAtUtc,
+        IEnumerable<ProofItem> proofItems)
+    {
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException("Closeout record id is required.", nameof(id));
+        }
+
+        if (jobId == Guid.Empty)
+        {
+            throw new ArgumentException("Job id is required.", nameof(jobId));
+        }
+
+        var items = proofItems?.ToList() ?? new List<ProofItem>();
+
+        if (items.Count == 0)
+        {
+            throw new ArgumentException("At least one proof item is required.", nameof(proofItems));
+        }
+
+        return new CloseoutRecord(
+            id,
+            jobId,
+            summary?.Trim() ?? string.Empty,
+            createdAtUtc,
+            items);
+    }
 }

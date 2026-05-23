@@ -25,3 +25,8 @@ coverage/
 
 # Local scratch files
 .scratch/
+
+# Local SQLite databases
+*.db
+*.db-shm
+*.db-wal

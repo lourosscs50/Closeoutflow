@@ -4,12 +4,22 @@ namespace Closeoutflow.Modules.Jobs;
 
 public sealed class Job
 {
-    private Job(Guid id, string title, DateTime createdAtUtc)
+    private Job(
+        Guid id,
+        string title,
+        JobStatus status,
+        DateTime createdAtUtc,
+        DateTime? startedAtUtc,
+        DateTime? pendingCloseoutAtUtc,
+        DateTime? closedAtUtc)
     {
         Id = id;
         Title = title;
-        Status = JobStatus.New;
+        Status = status;
         CreatedAtUtc = createdAtUtc;
+        StartedAtUtc = startedAtUtc;
+        PendingCloseoutAtUtc = pendingCloseoutAtUtc;
+        ClosedAtUtc = closedAtUtc;
     }
 
     public Guid Id { get; }
@@ -27,7 +37,44 @@ public sealed class Job
             return Result<Job>.Failure(new Error("Jobs.TitleRequired", "Job title is required."));
         }
 
-        return Result<Job>.Success(new Job(Guid.NewGuid(), title.Trim(), createdAtUtc));
+        return Result<Job>.Success(
+            new Job(
+                Guid.NewGuid(),
+                title.Trim(),
+                JobStatus.New,
+                createdAtUtc,
+                startedAtUtc: null,
+                pendingCloseoutAtUtc: null,
+                closedAtUtc: null));
+    }
+
+    public static Job Rehydrate(
+        Guid id,
+        string title,
+        JobStatus status,
+        DateTime createdAtUtc,
+        DateTime? startedAtUtc,
+        DateTime? pendingCloseoutAtUtc,
+        DateTime? closedAtUtc)
+    {
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException("Job id is required.", nameof(id));
+        }
+
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new ArgumentException("Job title is required.", nameof(title));
+        }
+
+        return new Job(
+            id,
+            title.Trim(),
+            status,
+            createdAtUtc,
+            startedAtUtc,
+            pendingCloseoutAtUtc,
+            closedAtUtc);
     }
 
     public Result Start(DateTime utcNow)

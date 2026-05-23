@@ -19,5 +19,19 @@ public sealed class ProofItem
     {
         return new ProofItem(Guid.NewGuid(), type, value.Trim(), createdAtUtc);
     }
+
+    public static ProofItem Rehydrate(Guid id, ProofItemType type, string value, DateTime createdAtUtc)
+    {
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException("Proof item id is required.", nameof(id));
+        }
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException("Proof item value is required.", nameof(value));
+        }
+
+        return new ProofItem(id, type, value.Trim(), createdAtUtc);
+    }
 }
-    

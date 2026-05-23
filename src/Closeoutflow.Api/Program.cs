@@ -1,5 +1,6 @@
 using Closeoutflow.Api.Contracts;
-using Closeoutflow.Api.Repositories;
+using Closeoutflow.Api.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Closeoutflow.Modules.Closeouts;
 using Closeoutflow.Modules.Closeouts.Application;
 using Closeoutflow.Modules.Jobs;
@@ -10,12 +11,24 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddSingleton<IJobRepository, InMemoryJobRepository>();
-builder.Services.AddSingleton<ICloseoutRecordRepository, InMemoryCloseoutRecordRepository>();
+var connectionString = builder.Configuration.GetConnectionString("CloseoutflowDb")
+    ?? "Data Source=closeoutflow.db";
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite(connectionString));
+
+builder.Services.AddScoped<IJobRepository, EfJobRepository>();
+builder.Services.AddScoped<ICloseoutRecordRepository, EfCloseoutRecordRepository>();
 builder.Services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 builder.Services.AddScoped<CompleteJobCloseoutHandler>();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    dbContext.Database.EnsureCreated();
+}
 
 if (app.Environment.IsDevelopment())
 {
