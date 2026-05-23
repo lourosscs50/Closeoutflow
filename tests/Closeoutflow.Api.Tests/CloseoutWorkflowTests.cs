@@ -1,14 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Closeoutflow.Api.Tests;
 
-public class CloseoutWorkflowTests : IClassFixture<WebApplicationFactory<Program>>
+public class CloseoutWorkflowTests : IClassFixture<CloseoutflowApiFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly CloseoutflowApiFactory _factory;
 
-    public CloseoutWorkflowTests(WebApplicationFactory<Program> factory)
+    public CloseoutWorkflowTests(CloseoutflowApiFactory factory)
     {
         _factory = factory;
     }
