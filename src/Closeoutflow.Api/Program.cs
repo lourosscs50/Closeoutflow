@@ -36,6 +36,34 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+
+app.MapGet("/health", () =>
+{
+    return Results.Ok(new
+    {
+        status = "Healthy",
+        service = "Closeoutflow.Api"
+    });
+});
+
+app.MapGet("/health/ready", async (
+    AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var canConnect = await dbContext.Database.CanConnectAsync(cancellationToken);
+
+    if (!canConnect)
+    {
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
+
+    return Results.Ok(new
+    {
+        status = "Ready",
+        database = "Reachable"
+    });
+});
+
 app.MapPost("/jobs", async (
     CreateJobRequest request,
     IJobRepository jobRepository,
