@@ -157,3 +157,59 @@ public sealed class JobsEndpointGetByIdContractTests : IClassFixture<Closeoutflo
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }
+
+public sealed class JobsEndpointListContractTests : IClassFixture<CloseoutflowApiFactory>
+{
+    private readonly CloseoutflowApiFactory _factory;
+
+    public JobsEndpointListContractTests(CloseoutflowApiFactory factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task GetJobs_Should_Return_Created_Job_When_Job_Exists()
+    {
+        var client = _factory.CreateClient();
+
+        var createRequest = new
+        {
+            title = "Repair drywall"
+        };
+
+        var createResponse = await client.PostAsJsonAsync("/jobs", createRequest);
+
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var createdJson = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(createdJson.TryGetProperty("jobId", out var createdJobId));
+        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+
+        var listResponse = await client.GetAsync("/jobs");
+
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+        var listJson = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(JsonValueKind.Array, listJson.ValueKind);
+        Assert.True(listJson.GetArrayLength() >= 1);
+
+        var matchingJob = listJson
+            .EnumerateArray()
+            .SingleOrDefault(job =>
+                job.TryGetProperty("jobId", out var listedJobId)
+                && listedJobId.GetString() == jobId.ToString());
+
+        Assert.Equal(JsonValueKind.Object, matchingJob.ValueKind);
+
+        Assert.True(matchingJob.TryGetProperty("title", out var title));
+        Assert.Equal("Repair drywall", title.GetString());
+
+        Assert.True(matchingJob.TryGetProperty("status", out var status));
+        Assert.False(string.IsNullOrWhiteSpace(status.GetString()));
+
+        Assert.True(matchingJob.TryGetProperty("createdAtUtc", out var createdAtUtc));
+        Assert.Equal(JsonValueKind.String, createdAtUtc.ValueKind);
+    }
+}
