@@ -267,3 +267,61 @@ public sealed class JobsEndpointStartContractTests : IClassFixture<CloseoutflowA
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }
+
+public sealed class JobsEndpointMarkPendingCloseoutContractTests : IClassFixture<CloseoutflowApiFactory>
+{
+    private readonly CloseoutflowApiFactory _factory;
+
+    public JobsEndpointMarkPendingCloseoutContractTests(CloseoutflowApiFactory factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task MarkPendingCloseout_Should_Return_Ok_With_Status_Response_When_Job_Exists()
+    {
+        var client = _factory.CreateClient();
+
+        var createRequest = new
+        {
+            title = "Replace outlet cover"
+        };
+
+        var createResponse = await client.PostAsJsonAsync("/jobs", createRequest);
+
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var createdJson = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(createdJson.TryGetProperty("jobId", out var createdJobId));
+        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+
+        var startResponse = await client.PostAsync($"/jobs/{jobId}/start", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, startResponse.StatusCode);
+
+        var pendingResponse = await client.PostAsync($"/jobs/{jobId}/mark-pending-closeout", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, pendingResponse.StatusCode);
+
+        var pendingJson = await pendingResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(JsonValueKind.Object, pendingJson.ValueKind);
+
+        Assert.True(pendingJson.TryGetProperty("jobId", out var pendingJobId));
+        Assert.Equal(jobId.ToString(), pendingJobId.GetString());
+
+        Assert.True(pendingJson.TryGetProperty("status", out var status));
+        Assert.False(string.IsNullOrWhiteSpace(status.GetString()));
+    }
+
+    [Fact]
+    public async Task MarkPendingCloseout_Should_Return_NotFound_When_Job_Does_Not_Exist()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsync($"/jobs/{Guid.NewGuid()}/mark-pending-closeout", content: null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+}
