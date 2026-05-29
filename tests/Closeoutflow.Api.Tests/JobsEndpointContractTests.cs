@@ -213,3 +213,57 @@ public sealed class JobsEndpointListContractTests : IClassFixture<CloseoutflowAp
         Assert.Equal(JsonValueKind.String, createdAtUtc.ValueKind);
     }
 }
+
+public sealed class JobsEndpointStartContractTests : IClassFixture<CloseoutflowApiFactory>
+{
+    private readonly CloseoutflowApiFactory _factory;
+
+    public JobsEndpointStartContractTests(CloseoutflowApiFactory factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task StartJob_Should_Return_Ok_With_Status_Response_When_Job_Exists()
+    {
+        var client = _factory.CreateClient();
+
+        var createRequest = new
+        {
+            title = "Paint trim"
+        };
+
+        var createResponse = await client.PostAsJsonAsync("/jobs", createRequest);
+
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var createdJson = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(createdJson.TryGetProperty("jobId", out var createdJobId));
+        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+
+        var startResponse = await client.PostAsync($"/jobs/{jobId}/start", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, startResponse.StatusCode);
+
+        var startedJson = await startResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(JsonValueKind.Object, startedJson.ValueKind);
+
+        Assert.True(startedJson.TryGetProperty("jobId", out var startedJobId));
+        Assert.Equal(jobId.ToString(), startedJobId.GetString());
+
+        Assert.True(startedJson.TryGetProperty("status", out var status));
+        Assert.False(string.IsNullOrWhiteSpace(status.GetString()));
+    }
+
+    [Fact]
+    public async Task StartJob_Should_Return_NotFound_When_Job_Does_Not_Exist()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsync($"/jobs/{Guid.NewGuid()}/start", content: null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+}
