@@ -4,11 +4,11 @@ using System.Text.Json;
 
 namespace Closeoutflow.Api.Tests;
 
-public sealed class JobsEndpointContractTests : IClassFixture<CloseoutflowApiFactory>
+public sealed class JobsEndpointEmptyStateContractTests : IClassFixture<CloseoutflowApiFactory>
 {
     private readonly CloseoutflowApiFactory _factory;
 
-    public JobsEndpointContractTests(CloseoutflowApiFactory factory)
+    public JobsEndpointEmptyStateContractTests(CloseoutflowApiFactory factory)
     {
         _factory = factory;
     }
@@ -22,9 +22,47 @@ public sealed class JobsEndpointContractTests : IClassFixture<CloseoutflowApiFac
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        using var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(JsonValueKind.Array, json.ValueKind);
         Assert.Equal(0, json.GetArrayLength());
+    }
+}
+
+public sealed class JobsEndpointCreateContractTests : IClassFixture<CloseoutflowApiFactory>
+{
+    private readonly CloseoutflowApiFactory _factory;
+
+    public JobsEndpointCreateContractTests(CloseoutflowApiFactory factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task CreateJob_Should_Return_Ok_With_Job_Response_When_Title_Is_Valid()
+    {
+        var client = _factory.CreateClient();
+
+        var request = new
+        {
+            title = "Replace water heater"
+        };
+
+        var response = await client.PostAsJsonAsync("/jobs", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(JsonValueKind.Object, json.ValueKind);
+
+        Assert.True(json.TryGetProperty("jobId", out var jobId));
+        Assert.True(Guid.TryParse(jobId.GetString(), out _));
+
+        Assert.True(json.TryGetProperty("title", out var title));
+        Assert.Equal("Replace water heater", title.GetString());
+
+        Assert.True(json.TryGetProperty("status", out var status));
+        Assert.False(string.IsNullOrWhiteSpace(status.GetString()));
     }
 }
