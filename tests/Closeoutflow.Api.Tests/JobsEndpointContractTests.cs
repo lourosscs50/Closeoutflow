@@ -100,3 +100,60 @@ public sealed class JobsEndpointInvalidCreateContractTests : IClassFixture<Close
         Assert.False(string.IsNullOrWhiteSpace(message.GetString()));
     }
 }
+
+public sealed class JobsEndpointGetByIdContractTests : IClassFixture<CloseoutflowApiFactory>
+{
+    private readonly CloseoutflowApiFactory _factory;
+
+    public JobsEndpointGetByIdContractTests(CloseoutflowApiFactory factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task GetJobById_Should_Return_Created_Job_When_Job_Exists()
+    {
+        var client = _factory.CreateClient();
+
+        var createRequest = new
+        {
+            title = "Install shutoff valve"
+        };
+
+        var createResponse = await client.PostAsJsonAsync("/jobs", createRequest);
+
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var createdJson = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(createdJson.TryGetProperty("jobId", out var createdJobId));
+        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+
+        var getResponse = await client.GetAsync($"/jobs/{jobId}");
+
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var fetchedJson = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(JsonValueKind.Object, fetchedJson.ValueKind);
+
+        Assert.True(fetchedJson.TryGetProperty("jobId", out var fetchedJobId));
+        Assert.Equal(jobId.ToString(), fetchedJobId.GetString());
+
+        Assert.True(fetchedJson.TryGetProperty("title", out var title));
+        Assert.Equal("Install shutoff valve", title.GetString());
+
+        Assert.True(fetchedJson.TryGetProperty("status", out var status));
+        Assert.False(string.IsNullOrWhiteSpace(status.GetString()));
+    }
+
+    [Fact]
+    public async Task GetJobById_Should_Return_NotFound_When_Job_Does_Not_Exist()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/jobs/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+}
