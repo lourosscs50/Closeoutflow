@@ -66,3 +66,37 @@ public sealed class JobsEndpointCreateContractTests : IClassFixture<Closeoutflow
         Assert.False(string.IsNullOrWhiteSpace(status.GetString()));
     }
 }
+
+public sealed class JobsEndpointInvalidCreateContractTests : IClassFixture<CloseoutflowApiFactory>
+{
+    private readonly CloseoutflowApiFactory _factory;
+
+    public JobsEndpointInvalidCreateContractTests(CloseoutflowApiFactory factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task CreateJob_Should_Return_BadRequest_When_Title_Is_Blank()
+    {
+        var client = _factory.CreateClient();
+
+        var request = new
+        {
+            title = "   "
+        };
+
+        var response = await client.PostAsJsonAsync("/jobs", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(JsonValueKind.Object, json.ValueKind);
+        Assert.True(json.TryGetProperty("error", out var error));
+        Assert.False(string.IsNullOrWhiteSpace(error.GetString()));
+
+        Assert.True(json.TryGetProperty("message", out var message));
+        Assert.False(string.IsNullOrWhiteSpace(message.GetString()));
+    }
+}
