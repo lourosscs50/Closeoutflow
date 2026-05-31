@@ -409,3 +409,86 @@ public sealed class JobsEndpointCloseoutContractTests : IClassFixture<Closeoutfl
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }
+
+public sealed class CloseoutsEndpointListContractTests : IClassFixture<CloseoutflowApiFactory>
+{
+    private readonly CloseoutflowApiFactory _factory;
+
+    public CloseoutsEndpointListContractTests(CloseoutflowApiFactory factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task GetCloseouts_Should_Return_Created_Closeout_When_Closeout_Exists()
+    {
+        var client = _factory.CreateClient();
+
+        var createJobRequest = new
+        {
+            title = "Replace hallway light fixture"
+        };
+
+        var createJobResponse = await client.PostAsJsonAsync("/jobs", createJobRequest);
+
+        Assert.Equal(HttpStatusCode.OK, createJobResponse.StatusCode);
+
+        var createdJobJson = await createJobResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(createdJobJson.TryGetProperty("jobId", out var createdJobId));
+        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+
+        var startResponse = await client.PostAsync($"/jobs/{jobId}/start", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, startResponse.StatusCode);
+
+        var pendingResponse = await client.PostAsync($"/jobs/{jobId}/mark-pending-closeout", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, pendingResponse.StatusCode);
+
+        var closeoutRequest = new
+        {
+            summary = "Hallway light fixture replaced and tested.",
+            proofItems = new[]
+            {
+                new
+                {
+                    type = 1,
+                    value = "photo://hallway-light-fixture"
+                }
+            }
+        };
+
+        var closeoutResponse = await client.PostAsJsonAsync($"/jobs/{jobId}/closeout", closeoutRequest);
+
+        Assert.Equal(HttpStatusCode.OK, closeoutResponse.StatusCode);
+
+        var createdCloseoutJson = await closeoutResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(createdCloseoutJson.TryGetProperty("closeoutRecordId", out var createdCloseoutRecordId));
+        Assert.True(Guid.TryParse(createdCloseoutRecordId.GetString(), out var closeoutRecordId));
+
+        var listResponse = await client.GetAsync("/closeouts");
+
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+        var listJson = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(JsonValueKind.Array, listJson.ValueKind);
+        Assert.True(listJson.GetArrayLength() >= 1);
+
+        var matchingCloseout = listJson
+            .EnumerateArray()
+            .SingleOrDefault(closeout =>
+                closeout.TryGetProperty("closeoutRecordId", out var listedCloseoutId)
+                && listedCloseoutId.GetString() == closeoutRecordId.ToString());
+
+        Assert.Equal(JsonValueKind.Object, matchingCloseout.ValueKind);
+
+        Assert.True(matchingCloseout.TryGetProperty("jobId", out var listedJobId));
+        Assert.Equal(jobId.ToString(), listedJobId.GetString());
+
+        Assert.True(matchingCloseout.TryGetProperty("summary", out var summary));
+        Assert.Equal("Hallway light fixture replaced and tested.", summary.GetString());
+    }
+}
