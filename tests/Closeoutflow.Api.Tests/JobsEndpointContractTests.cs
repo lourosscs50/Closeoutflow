@@ -325,3 +325,87 @@ public sealed class JobsEndpointMarkPendingCloseoutContractTests : IClassFixture
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }
+
+public sealed class JobsEndpointCloseoutContractTests : IClassFixture<CloseoutflowApiFactory>
+{
+    private readonly CloseoutflowApiFactory _factory;
+
+    public JobsEndpointCloseoutContractTests(CloseoutflowApiFactory factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task CloseoutJob_Should_Return_Ok_With_Closeout_Response_When_Job_Is_Pending_Closeout()
+    {
+        var client = _factory.CreateClient();
+
+        var createRequest = new
+        {
+            title = "Install smoke detector"
+        };
+
+        var createResponse = await client.PostAsJsonAsync("/jobs", createRequest);
+
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var createdJson = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(createdJson.TryGetProperty("jobId", out var createdJobId));
+        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+
+        var startResponse = await client.PostAsync($"/jobs/{jobId}/start", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, startResponse.StatusCode);
+
+        var pendingResponse = await client.PostAsync($"/jobs/{jobId}/mark-pending-closeout", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, pendingResponse.StatusCode);
+
+        var closeoutRequest = new
+        {
+            summary = "Smoke detector installed and tested.",
+            proofItems = new[]
+            {
+                new
+                {
+                    type = 1,
+                    value = "photo://smoke-detector-installed"
+                }
+            }
+        };
+
+        var closeoutResponse = await client.PostAsJsonAsync($"/jobs/{jobId}/closeout", closeoutRequest);
+
+        Assert.Equal(HttpStatusCode.OK, closeoutResponse.StatusCode);
+
+        var closeoutJson = await closeoutResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(JsonValueKind.Object, closeoutJson.ValueKind);
+
+        Assert.True(closeoutJson.TryGetProperty("closeoutRecordId", out var closeoutRecordId));
+        Assert.True(Guid.TryParse(closeoutRecordId.GetString(), out _));
+
+        Assert.True(closeoutJson.TryGetProperty("jobId", out var closeoutJobId));
+        Assert.Equal(jobId.ToString(), closeoutJobId.GetString());
+
+        Assert.True(closeoutJson.TryGetProperty("jobStatus", out var jobStatus));
+        Assert.False(string.IsNullOrWhiteSpace(jobStatus.GetString()));
+    }
+
+    [Fact]
+    public async Task CloseoutJob_Should_Return_BadRequest_When_Job_Does_Not_Exist()
+    {
+        var client = _factory.CreateClient();
+
+        var closeoutRequest = new
+        {
+            summary = "Missing job closeout.",
+            proofItems = Array.Empty<object>()
+        };
+
+        var response = await client.PostAsJsonAsync($"/jobs/{Guid.NewGuid()}/closeout", closeoutRequest);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+}
