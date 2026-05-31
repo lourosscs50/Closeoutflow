@@ -18,49 +18,10 @@ public sealed class CloseoutsEndpointListContractTests : IClassFixture<Closeoutf
     {
         var client = _factory.CreateClient();
 
-        var createJobRequest = new
-        {
-            title = "Replace hallway light fixture"
-        };
-
-        var createJobResponse = await client.PostAsJsonAsync("/jobs", createJobRequest);
-
-        Assert.Equal(HttpStatusCode.OK, createJobResponse.StatusCode);
-
-        var createdJobJson = await createJobResponse.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.True(createdJobJson.TryGetProperty("jobId", out var createdJobId));
-        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
-
-        var startResponse = await client.PostAsync($"/jobs/{jobId}/start", content: null);
-
-        Assert.Equal(HttpStatusCode.OK, startResponse.StatusCode);
-
-        var pendingResponse = await client.PostAsync($"/jobs/{jobId}/mark-pending-closeout", content: null);
-
-        Assert.Equal(HttpStatusCode.OK, pendingResponse.StatusCode);
-
-        var closeoutRequest = new
-        {
-            summary = "Hallway light fixture replaced and tested.",
-            proofItems = new[]
-            {
-                new
-                {
-                    type = 1,
-                    value = "photo://hallway-light-fixture"
-                }
-            }
-        };
-
-        var closeoutResponse = await client.PostAsJsonAsync($"/jobs/{jobId}/closeout", closeoutRequest);
-
-        Assert.Equal(HttpStatusCode.OK, closeoutResponse.StatusCode);
-
-        var createdCloseoutJson = await closeoutResponse.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.True(createdCloseoutJson.TryGetProperty("closeoutRecordId", out var createdCloseoutRecordId));
-        Assert.True(Guid.TryParse(createdCloseoutRecordId.GetString(), out var closeoutRecordId));
+        var (jobId, closeoutRecordId) = await client.CreateClosedOutJobAsync(
+            "Replace hallway light fixture",
+            "Hallway light fixture replaced and tested.",
+            "photo://hallway-light-fixture");
 
         var listResponse = await client.GetAsync("/closeouts");
 
@@ -101,49 +62,10 @@ public sealed class CloseoutsEndpointGetByIdContractTests : IClassFixture<Closeo
     {
         var client = _factory.CreateClient();
 
-        var createJobRequest = new
-        {
-            title = "Repair cabinet hinge"
-        };
-
-        var createJobResponse = await client.PostAsJsonAsync("/jobs", createJobRequest);
-
-        Assert.Equal(HttpStatusCode.OK, createJobResponse.StatusCode);
-
-        var createdJobJson = await createJobResponse.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.True(createdJobJson.TryGetProperty("jobId", out var createdJobId));
-        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
-
-        var startResponse = await client.PostAsync($"/jobs/{jobId}/start", content: null);
-
-        Assert.Equal(HttpStatusCode.OK, startResponse.StatusCode);
-
-        var pendingResponse = await client.PostAsync($"/jobs/{jobId}/mark-pending-closeout", content: null);
-
-        Assert.Equal(HttpStatusCode.OK, pendingResponse.StatusCode);
-
-        var closeoutRequest = new
-        {
-            summary = "Cabinet hinge repaired and verified.",
-            proofItems = new[]
-            {
-                new
-                {
-                    type = 1,
-                    value = "photo://cabinet-hinge-repaired"
-                }
-            }
-        };
-
-        var closeoutResponse = await client.PostAsJsonAsync($"/jobs/{jobId}/closeout", closeoutRequest);
-
-        Assert.Equal(HttpStatusCode.OK, closeoutResponse.StatusCode);
-
-        var createdCloseoutJson = await closeoutResponse.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.True(createdCloseoutJson.TryGetProperty("closeoutRecordId", out var createdCloseoutRecordId));
-        Assert.True(Guid.TryParse(createdCloseoutRecordId.GetString(), out var closeoutRecordId));
+        var (jobId, closeoutRecordId) = await client.CreateClosedOutJobAsync(
+            "Repair cabinet hinge",
+            "Cabinet hinge repaired and verified.",
+            "photo://cabinet-hinge-repaired");
 
         var getResponse = await client.GetAsync($"/closeouts/{closeoutRecordId}");
 
