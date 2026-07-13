@@ -115,19 +115,7 @@ public sealed class JobsEndpointGetByIdContractTests : IClassFixture<Closeoutflo
     {
         var client = _factory.CreateClient();
 
-        var createRequest = new
-        {
-            title = "Install shutoff valve"
-        };
-
-        var createResponse = await client.PostAsJsonAsync("/jobs", createRequest);
-
-        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
-
-        var createdJson = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.True(createdJson.TryGetProperty("jobId", out var createdJobId));
-        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+        var jobId = await client.CreateJobAsync("Install shutoff valve");
 
         var getResponse = await client.GetAsync($"/jobs/{jobId}");
 
@@ -172,19 +160,7 @@ public sealed class JobsEndpointListContractTests : IClassFixture<CloseoutflowAp
     {
         var client = _factory.CreateClient();
 
-        var createRequest = new
-        {
-            title = "Repair drywall"
-        };
-
-        var createResponse = await client.PostAsJsonAsync("/jobs", createRequest);
-
-        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
-
-        var createdJson = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.True(createdJson.TryGetProperty("jobId", out var createdJobId));
-        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+        var jobId = await client.CreateJobAsync("Repair drywall");
 
         var listResponse = await client.GetAsync("/jobs");
 
@@ -228,19 +204,7 @@ public sealed class JobsEndpointStartContractTests : IClassFixture<CloseoutflowA
     {
         var client = _factory.CreateClient();
 
-        var createRequest = new
-        {
-            title = "Paint trim"
-        };
-
-        var createResponse = await client.PostAsJsonAsync("/jobs", createRequest);
-
-        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
-
-        var createdJson = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.True(createdJson.TryGetProperty("jobId", out var createdJobId));
-        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+        var jobId = await client.CreateJobAsync("Paint trim");
 
         var startResponse = await client.PostAsync($"/jobs/{jobId}/start", content: null);
 
@@ -282,19 +246,7 @@ public sealed class JobsEndpointMarkPendingCloseoutContractTests : IClassFixture
     {
         var client = _factory.CreateClient();
 
-        var createRequest = new
-        {
-            title = "Replace outlet cover"
-        };
-
-        var createResponse = await client.PostAsJsonAsync("/jobs", createRequest);
-
-        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
-
-        var createdJson = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.True(createdJson.TryGetProperty("jobId", out var createdJobId));
-        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+        var jobId = await client.CreateJobAsync("Replace outlet cover");
 
         var startResponse = await client.PostAsync($"/jobs/{jobId}/start", content: null);
 
@@ -340,19 +292,7 @@ public sealed class JobsEndpointCloseoutContractTests : IClassFixture<Closeoutfl
     {
         var client = _factory.CreateClient();
 
-        var createRequest = new
-        {
-            title = "Install smoke detector"
-        };
-
-        var createResponse = await client.PostAsJsonAsync("/jobs", createRequest);
-
-        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
-
-        var createdJson = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.True(createdJson.TryGetProperty("jobId", out var createdJobId));
-        Assert.True(Guid.TryParse(createdJobId.GetString(), out var jobId));
+        var jobId = await client.CreateJobAsync("Install smoke detector");
 
         var startResponse = await client.PostAsync($"/jobs/{jobId}/start", content: null);
 
