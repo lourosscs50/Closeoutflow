@@ -1,6 +1,8 @@
 using Closeoutflow.Modules.Closeouts;
 using Closeoutflow.Modules.Closeouts.Application;
 using Closeoutflow.Modules.Jobs;
+using Closeoutflow.Shared;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace Closeoutflow.Api.Persistence;
@@ -15,7 +17,7 @@ public sealed class EfCompleteJobCloseoutPersistence
         _dbContext = dbContext;
     }
 
-    public async Task SaveAsync(
+    public async Task<Result> SaveAsync(
         Job job,
         CloseoutRecord closeoutRecord,
         CancellationToken cancellationToken = default)
@@ -37,15 +39,26 @@ public sealed class EfCompleteJobCloseoutPersistence
                 $"A job with id '{job.Id}' does not exist.");
         }
 
-        var closeoutExists = await _dbContext.CloseoutRecords
+        var closeoutIdExists = await _dbContext.CloseoutRecords
             .AnyAsync(
                 x => x.Id == closeoutRecord.Id,
                 cancellationToken);
 
-        if (closeoutExists)
+        if (closeoutIdExists)
         {
             throw new InvalidOperationException(
                 $"A closeout record with id '{closeoutRecord.Id}' already exists.");
+        }
+
+        var jobCloseoutExists = await _dbContext.CloseoutRecords
+            .AnyAsync(
+                x => x.JobId == job.Id,
+                cancellationToken);
+
+        if (jobCloseoutExists)
+        {
+            return Result.Failure(
+                CloseoutErrors.AlreadyExistsForJob);
         }
 
         jobRow.Title = job.Title;
@@ -75,6 +88,29 @@ public sealed class EfCompleteJobCloseoutPersistence
                     .ToList()
             });
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+            when (IsDuplicateJobCloseout(exception))
+        {
+            _dbContext.ChangeTracker.Clear();
+
+            return Result.Failure(
+                CloseoutErrors.AlreadyExistsForJob);
+        }
+
+        return Result.Success();
+    }
+
+    private static bool IsDuplicateJobCloseout(
+        DbUpdateException exception)
+    {
+        return exception.InnerException is SqliteException sqliteException
+            && sqliteException.SqliteErrorCode == 19
+            && sqliteException.Message.Contains(
+                "closeout_records.JobId",
+                StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -162,6 +162,39 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
             proof => Assert.Equal(now, proof.CreatedAtUtc));
     }
 
+
+    [Fact]
+    public async Task Persistence_Failure_Should_Be_Returned_By_Handler()
+    {
+        var now = new DateTime(
+            2026,
+            6,
+            16,
+            8,
+            0,
+            0,
+            DateTimeKind.Utc);
+
+        var job = CreatePendingJob(now);
+        var jobs = new RecordingJobRepository(job);
+
+        var handler = CreateHandler(
+            jobs,
+            new RejectingCompleteJobCloseoutPersistence(),
+            now);
+
+        var result = await handler.HandleAsync(
+            new CompleteJobCloseoutCommand(
+                job.Id,
+                "Completed",
+                new[] { (ProofItemType.Note, "Verified") }));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(
+            CloseoutErrors.AlreadyExistsForJob,
+            result.Error);
+    }
+
     private static Job CreatePendingJob(DateTime now)
     {
         var job = Job.Create(
@@ -179,7 +212,7 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
 
     private static CompleteJobCloseoutHandler CreateHandler(
         RecordingJobRepository jobs,
-        RecordingCompleteJobCloseoutPersistence persistence,
+        ICompleteJobCloseoutPersistence persistence,
         DateTime? now = null)
     {
         return new CompleteJobCloseoutHandler(
@@ -249,7 +282,7 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
         internal Job? LastSavedJob { get; private set; }
         internal CloseoutRecord? LastSavedCloseout { get; private set; }
 
-        public Task SaveAsync(
+        public Task<Result> SaveAsync(
             Job job,
             CloseoutRecord closeoutRecord,
             CancellationToken cancellationToken = default)
@@ -258,7 +291,22 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
             LastSavedJob = job;
             LastSavedCloseout = closeoutRecord;
 
-            return Task.CompletedTask;
+            return Task.FromResult(Result.Success());
+        }
+    }
+
+
+    private sealed class RejectingCompleteJobCloseoutPersistence
+        : ICompleteJobCloseoutPersistence
+    {
+        public Task<Result> SaveAsync(
+            Job job,
+            CloseoutRecord closeoutRecord,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                Result.Failure(
+                    CloseoutErrors.AlreadyExistsForJob));
         }
     }
 

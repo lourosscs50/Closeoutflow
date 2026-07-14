@@ -43,6 +43,10 @@ public sealed class AppDbContext : DbContext
             builder.Property(x => x.CreatedAtUtc)
                 .IsRequired();
 
+            builder.HasIndex(x => x.JobId)
+                .IsUnique()
+                .HasDatabaseName("UX_closeout_records_JobId");
+
             builder.HasMany(x => x.ProofItems)
                 .WithOne(x => x.CloseoutRecord)
                 .HasForeignKey(x => x.CloseoutRecordId)

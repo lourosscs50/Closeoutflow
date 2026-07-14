@@ -250,13 +250,14 @@ internal sealed class FakeCompleteJobCloseoutPersistence
 {
     public List<CloseoutRecord> Items { get; } = new();
 
-    public Task SaveAsync(
+    public Task<Result> SaveAsync(
         Job job,
         CloseoutRecord closeoutRecord,
         CancellationToken cancellationToken = default)
     {
         Items.Add(closeoutRecord);
-        return Task.CompletedTask;
+
+        return Task.FromResult(Result.Success());
     }
 }
 

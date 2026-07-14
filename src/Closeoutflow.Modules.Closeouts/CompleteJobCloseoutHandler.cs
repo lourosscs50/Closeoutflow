@@ -61,10 +61,16 @@ public sealed class CompleteJobCloseoutHandler
                 jobCloseResult.Error);
         }
 
-        await _persistence.SaveAsync(
+        var persistenceResult = await _persistence.SaveAsync(
             job,
             closeoutResult.Value,
             cancellationToken);
+
+        if (persistenceResult.IsFailure)
+        {
+            return Result<CompleteJobCloseoutResult>.Failure(
+                persistenceResult.Error);
+        }
 
         return Result<CompleteJobCloseoutResult>.Success(
             new CompleteJobCloseoutResult(

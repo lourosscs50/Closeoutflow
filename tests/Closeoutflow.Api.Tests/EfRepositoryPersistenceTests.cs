@@ -194,44 +194,41 @@ public sealed class EfRepositoryPersistenceTests
 
         var firstJobId = Guid.NewGuid();
         var secondJobId = Guid.NewGuid();
+        var thirdJobId = Guid.NewGuid();
 
         var older = CreateCloseout(
             firstJobId,
             "Older closeout",
             new DateTime(2026, 5, 6, 8, 0, 0, DateTimeKind.Utc));
 
-        var newerForFirstJob = CreateCloseout(
-            firstJobId,
-            "Newer closeout for first job",
+        var newerForSecondJob = CreateCloseout(
+            secondJobId,
+            "Newer closeout for second job",
             new DateTime(2026, 5, 7, 8, 0, 0, DateTimeKind.Utc));
 
-        var newestForSecondJob = CreateCloseout(
-            secondJobId,
-            "Newest closeout for second job",
+        var newestForThirdJob = CreateCloseout(
+            thirdJobId,
+            "Newest closeout for third job",
             new DateTime(2026, 5, 8, 8, 0, 0, DateTimeKind.Utc));
 
         await repository.AddAsync(older);
-        await repository.AddAsync(newerForFirstJob);
-        await repository.AddAsync(newestForSecondJob);
+        await repository.AddAsync(newerForSecondJob);
+        await repository.AddAsync(newestForThirdJob);
 
         var all = await repository.ListAsync();
 
         Assert.Collection(
             all,
-            first => Assert.Equal(newestForSecondJob.Id, first.Id),
-            second => Assert.Equal(newerForFirstJob.Id, second.Id),
+            first => Assert.Equal(newestForThirdJob.Id, first.Id),
+            second => Assert.Equal(newerForSecondJob.Id, second.Id),
             third => Assert.Equal(older.Id, third.Id));
 
         var firstJobCloseouts = await repository.ListByJobIdAsync(firstJobId);
 
-        Assert.Collection(
-            firstJobCloseouts,
-            first => Assert.Equal(newerForFirstJob.Id, first.Id),
-            second => Assert.Equal(older.Id, second.Id));
+        var firstJobCloseout = Assert.Single(firstJobCloseouts);
 
-        Assert.All(
-            firstJobCloseouts,
-            closeout => Assert.Equal(firstJobId, closeout.JobId));
+        Assert.Equal(older.Id, firstJobCloseout.Id);
+        Assert.Equal(firstJobId, firstJobCloseout.JobId);
     }
 
     [Fact]
@@ -421,6 +418,169 @@ public sealed class EfRepositoryPersistenceTests
         Assert.Null(persistedJob.ClosedAtUtc);
         Assert.Null(persistedAttempt);
         Assert.NotNull(persistedExisting);
+    }
+
+
+    [Fact]
+    public async Task DatabaseInitializer_Should_Add_Unique_Job_Closeout_Index_To_Existing_Database()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+
+        await database.Context.Database.ExecuteSqlRawAsync(
+            """
+            DROP INDEX "UX_closeout_records_JobId";
+            """);
+
+        await DatabaseInitializer.InitializeAsync(
+            database.Context);
+
+        var jobId = Guid.NewGuid();
+
+        database.Context.CloseoutRecords.Add(
+            new CloseoutRecordRow
+            {
+                Id = Guid.NewGuid(),
+                JobId = jobId,
+                Summary = "First closeout",
+                CreatedAtUtc = new DateTime(
+                    2026,
+                    5,
+                    12,
+                    8,
+                    0,
+                    0,
+                    DateTimeKind.Utc)
+            });
+
+        await database.Context.SaveChangesAsync();
+        database.Context.ChangeTracker.Clear();
+
+        database.Context.CloseoutRecords.Add(
+            new CloseoutRecordRow
+            {
+                Id = Guid.NewGuid(),
+                JobId = jobId,
+                Summary = "Duplicate closeout",
+                CreatedAtUtc = new DateTime(
+                    2026,
+                    5,
+                    12,
+                    9,
+                    0,
+                    0,
+                    DateTimeKind.Utc)
+            });
+
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => database.Context.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task CompleteJobCloseoutPersistence_Save_Should_Return_Failure_When_Job_Already_Has_Closeout()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+
+        var jobs = new EfJobRepository(database.Context);
+
+        var closeouts =
+            new EfCloseoutRecordRepository(database.Context);
+
+        var persistence =
+            new EfCompleteJobCloseoutPersistence(database.Context);
+
+        var now = new DateTime(
+            2026,
+            5,
+            13,
+            12,
+            0,
+            0,
+            DateTimeKind.Utc);
+
+        var job = Job.Create(
+            "Inspect loading dock controls",
+            now.AddHours(-3)).Value;
+
+        Assert.True(
+            job.Start(now.AddHours(-2)).IsSuccess);
+
+        Assert.True(
+            job.MarkPendingCloseout(now.AddHours(-1)).IsSuccess);
+
+        await jobs.AddAsync(job);
+
+        var firstPendingJob =
+            await jobs.GetByIdAsync(job.Id);
+
+        var stalePendingJob =
+            await jobs.GetByIdAsync(job.Id);
+
+        Assert.NotNull(firstPendingJob);
+        Assert.NotNull(stalePendingJob);
+
+        var firstCloseout = CloseoutRecord.Create(
+            job.Id,
+            "First closeout",
+            new[]
+            {
+                (
+                    ProofItemType.Photo,
+                    "photo://first-closeout")
+            },
+            now).Value;
+
+        Assert.True(
+            firstPendingJob!.Close(now).IsSuccess);
+
+        var firstResult = await persistence.SaveAsync(
+            firstPendingJob,
+            firstCloseout);
+
+        Assert.True(firstResult.IsSuccess);
+
+        var attemptedCloseout = CloseoutRecord.Create(
+            job.Id,
+            "Attempted duplicate closeout",
+            new[]
+            {
+                (
+                    ProofItemType.Note,
+                    "Duplicate submission")
+            },
+            now.AddMinutes(1)).Value;
+
+        Assert.True(
+            stalePendingJob!.Close(
+                now.AddMinutes(1)).IsSuccess);
+
+        var duplicateResult = await persistence.SaveAsync(
+            stalePendingJob,
+            attemptedCloseout);
+
+        Assert.True(duplicateResult.IsFailure);
+        Assert.Equal(
+            CloseoutErrors.AlreadyExistsForJob,
+            duplicateResult.Error);
+
+        database.Context.ChangeTracker.Clear();
+
+        var persistedJob =
+            await jobs.GetByIdAsync(job.Id);
+
+        var persistedCloseouts =
+            await closeouts.ListByJobIdAsync(job.Id);
+
+        Assert.NotNull(persistedJob);
+        Assert.Equal(
+            JobStatus.Closed,
+            persistedJob!.Status);
+
+        Assert.Equal(now, persistedJob.ClosedAtUtc);
+
+        Assert.Single(persistedCloseouts);
+        Assert.Equal(
+            firstCloseout.Id,
+            persistedCloseouts.Single().Id);
     }
 
     private static CloseoutRecord CreateCloseout(
