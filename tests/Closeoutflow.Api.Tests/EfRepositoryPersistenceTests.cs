@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Closeoutflow.Api.Persistence;
 using Closeoutflow.Modules.Closeouts;
 using Closeoutflow.Modules.Closeouts.Application;
@@ -421,6 +422,142 @@ public sealed class EfRepositoryPersistenceTests
     }
 
 
+
+    [Fact]
+    public async Task Unique_Job_Closeout_Index_Should_Allow_Only_One_Competing_Insert_Across_Contexts()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var firstContext = database.CreateContext();
+        await using var secondContext = database.CreateContext();
+
+        var jobId = Guid.NewGuid();
+        var createdAtUtc = new DateTime(
+            2026,
+            5,
+            14,
+            8,
+            0,
+            0,
+            DateTimeKind.Utc);
+
+        firstContext.CloseoutRecords.Add(
+            new CloseoutRecordRow
+            {
+                Id = Guid.NewGuid(),
+                JobId = jobId,
+                Summary = "First competing closeout",
+                CreatedAtUtc = createdAtUtc
+            });
+
+        secondContext.CloseoutRecords.Add(
+            new CloseoutRecordRow
+            {
+                Id = Guid.NewGuid(),
+                JobId = jobId,
+                Summary = "Second competing closeout",
+                CreatedAtUtc = createdAtUtc.AddSeconds(1)
+            });
+
+        var exceptions = await Task.WhenAll(
+            CaptureExceptionAsync(
+                async () =>
+                {
+                    await firstContext.SaveChangesAsync();
+                }),
+            CaptureExceptionAsync(
+                async () =>
+                {
+                    await secondContext.SaveChangesAsync();
+                }));
+
+        Assert.Equal(
+            1,
+            exceptions.Count(exception => exception is null));
+
+        var conflict = Assert.Single(
+            exceptions.OfType<DbUpdateException>());
+
+        var sqliteException =
+            Assert.IsType<SqliteException>(
+                conflict.InnerException);
+
+        Assert.Equal(19, sqliteException.SqliteErrorCode);
+
+        Assert.Contains(
+            "closeout_records.JobId",
+            sqliteException.Message);
+
+        database.Context.ChangeTracker.Clear();
+
+        var persistedCloseouts =
+            await database.Context.CloseoutRecords
+                .Where(x => x.JobId == jobId)
+                .ToListAsync();
+
+        Assert.Single(persistedCloseouts);
+    }
+
+    [Fact]
+    public async Task DatabaseInitializer_Should_Reject_Existing_Duplicate_Job_Closeouts()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+
+        await database.Context.Database.ExecuteSqlRawAsync(
+            """
+            DROP INDEX "UX_closeout_records_JobId";
+            """);
+
+        var jobId = Guid.NewGuid();
+
+        database.Context.CloseoutRecords.AddRange(
+            new CloseoutRecordRow
+            {
+                Id = Guid.NewGuid(),
+                JobId = jobId,
+                Summary = "Existing first closeout",
+                CreatedAtUtc = new DateTime(
+                    2026,
+                    5,
+                    15,
+                    8,
+                    0,
+                    0,
+                    DateTimeKind.Utc)
+            },
+            new CloseoutRecordRow
+            {
+                Id = Guid.NewGuid(),
+                JobId = jobId,
+                Summary = "Existing duplicate closeout",
+                CreatedAtUtc = new DateTime(
+                    2026,
+                    5,
+                    15,
+                    9,
+                    0,
+                    0,
+                    DateTimeKind.Utc)
+            });
+
+        await database.Context.SaveChangesAsync();
+        database.Context.ChangeTracker.Clear();
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => DatabaseInitializer.InitializeAsync(
+                    database.Context));
+
+        Assert.Equal(
+            "The closeout database contains multiple closeout records for the same job.",
+            exception.Message);
+
+        var sqliteException =
+            Assert.IsType<SqliteException>(
+                exception.InnerException);
+
+        Assert.Equal(19, sqliteException.SqliteErrorCode);
+    }
+
     [Fact]
     public async Task DatabaseInitializer_Should_Add_Unique_Job_Closeout_Index_To_Existing_Database()
     {
@@ -583,6 +720,21 @@ public sealed class EfRepositoryPersistenceTests
             persistedCloseouts.Single().Id);
     }
 
+
+    private static async Task<Exception?> CaptureExceptionAsync(
+        Func<Task> action)
+    {
+        try
+        {
+            await action();
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
+    }
+
     private static CloseoutRecord CreateCloseout(
         Guid jobId,
         string summary,
@@ -613,6 +765,17 @@ public sealed class EfRepositoryPersistenceTests
         }
 
         internal AppDbContext Context { get; }
+
+        internal AppDbContext CreateContext()
+        {
+            var options =
+                new DbContextOptionsBuilder<AppDbContext>()
+                    .UseSqlite(
+                        $"Data Source={_databasePath};Pooling=False")
+                    .Options;
+
+            return new AppDbContext(options);
+        }
 
         internal static async Task<TestDatabase> CreateAsync()
         {
