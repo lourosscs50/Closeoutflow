@@ -6,16 +6,16 @@ namespace Closeoutflow.Modules.Closeouts.Application;
 public sealed class CompleteJobCloseoutHandler
 {
     private readonly IJobRepository _jobRepository;
-    private readonly ICloseoutRecordRepository _closeoutRecordRepository;
+    private readonly ICompleteJobCloseoutPersistence _persistence;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public CompleteJobCloseoutHandler(
         IJobRepository jobRepository,
-        ICloseoutRecordRepository closeoutRecordRepository,
+        ICompleteJobCloseoutPersistence persistence,
         IDateTimeProvider dateTimeProvider)
     {
         _jobRepository = jobRepository;
-        _closeoutRecordRepository = closeoutRecordRepository;
+        _persistence = persistence;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -23,38 +23,48 @@ public sealed class CompleteJobCloseoutHandler
         CompleteJobCloseoutCommand command,
         CancellationToken cancellationToken = default)
     {
-        var job = await _jobRepository.GetByIdAsync(command.JobId, cancellationToken);
+        var job = await _jobRepository.GetByIdAsync(
+            command.JobId,
+            cancellationToken);
 
         if (job is null)
         {
-            return Result<CompleteJobCloseoutResult>.Failure(JobApplicationErrors.NotFound);
+            return Result<CompleteJobCloseoutResult>.Failure(
+                JobApplicationErrors.NotFound);
         }
 
         if (job.Status != JobStatus.PendingCloseout)
         {
-            return Result<CompleteJobCloseoutResult>.Failure(JobApplicationErrors.JobMustBePendingCloseout);
+            return Result<CompleteJobCloseoutResult>.Failure(
+                JobApplicationErrors.JobMustBePendingCloseout);
         }
+
+        var utcNow = _dateTimeProvider.UtcNow;
 
         var closeoutResult = CloseoutRecord.Create(
             command.JobId,
             command.Summary,
             command.ProofItems,
-            _dateTimeProvider.UtcNow);
+            utcNow);
 
         if (closeoutResult.IsFailure)
         {
-            return Result<CompleteJobCloseoutResult>.Failure(closeoutResult.Error);
+            return Result<CompleteJobCloseoutResult>.Failure(
+                closeoutResult.Error);
         }
 
-        var jobCloseResult = job.Close(_dateTimeProvider.UtcNow);
+        var jobCloseResult = job.Close(utcNow);
 
         if (jobCloseResult.IsFailure)
         {
-            return Result<CompleteJobCloseoutResult>.Failure(jobCloseResult.Error);
+            return Result<CompleteJobCloseoutResult>.Failure(
+                jobCloseResult.Error);
         }
 
-        await _closeoutRecordRepository.AddAsync(closeoutResult.Value, cancellationToken);
-        await _jobRepository.UpdateAsync(job, cancellationToken);
+        await _persistence.SaveAsync(
+            job,
+            closeoutResult.Value,
+            cancellationToken);
 
         return Result<CompleteJobCloseoutResult>.Success(
             new CompleteJobCloseoutResult(

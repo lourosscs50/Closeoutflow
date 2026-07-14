@@ -1,5 +1,6 @@
 using Closeoutflow.Api.Persistence;
 using Closeoutflow.Modules.Closeouts;
+using Closeoutflow.Modules.Closeouts.Application;
 using Closeoutflow.Modules.Jobs;
 using Microsoft.EntityFrameworkCore;
 
@@ -250,6 +251,176 @@ public sealed class EfRepositoryPersistenceTests
             () => repository.AddAsync(closeout));
 
         Assert.Contains(closeout.Id.ToString(), exception.Message);
+    }
+
+
+    [Fact]
+    public async Task CompleteJobCloseoutPersistence_Save_Should_Persist_Job_And_Closeout_Together()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+
+        var jobs = new EfJobRepository(database.Context);
+        var closeouts =
+            new EfCloseoutRecordRepository(database.Context);
+
+        var persistence =
+            new EfCompleteJobCloseoutPersistence(database.Context);
+
+        var now = new DateTime(
+            2026,
+            5,
+            10,
+            12,
+            0,
+            0,
+            DateTimeKind.Utc);
+
+        var job = Job.Create(
+            "Inspect emergency lighting",
+            now.AddHours(-3)).Value;
+
+        Assert.True(
+            job.Start(now.AddHours(-2)).IsSuccess);
+
+        Assert.True(
+            job.MarkPendingCloseout(now.AddHours(-1)).IsSuccess);
+
+        await jobs.AddAsync(job);
+
+        var closeout = CloseoutRecord.Create(
+            job.Id,
+            "Inspection completed.",
+            new[]
+            {
+                (
+                    ProofItemType.Photo,
+                    "photo://emergency-lighting")
+            },
+            now).Value;
+
+        Assert.True(job.Close(now).IsSuccess);
+
+        await persistence.SaveAsync(job, closeout);
+
+        var persistedJob = await jobs.GetByIdAsync(job.Id);
+        var persistedCloseout =
+            await closeouts.GetByIdAsync(closeout.Id);
+
+        Assert.NotNull(persistedJob);
+        Assert.Equal(
+            JobStatus.Closed,
+            persistedJob!.Status);
+
+        Assert.Equal(
+            now,
+            persistedJob.ClosedAtUtc);
+
+        Assert.NotNull(persistedCloseout);
+        Assert.Equal(
+            job.Id,
+            persistedCloseout!.JobId);
+
+        Assert.Equal(
+            "Inspection completed.",
+            persistedCloseout.Summary);
+
+        Assert.Single(persistedCloseout.ProofItems);
+    }
+
+    [Fact]
+    public async Task CompleteJobCloseoutPersistence_Save_Should_Roll_Back_All_Changes_When_Save_Fails()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+
+        var jobs = new EfJobRepository(database.Context);
+        var closeouts =
+            new EfCloseoutRecordRepository(database.Context);
+
+        var persistence =
+            new EfCompleteJobCloseoutPersistence(database.Context);
+
+        var now = new DateTime(
+            2026,
+            5,
+            11,
+            12,
+            0,
+            0,
+            DateTimeKind.Utc);
+
+        var job = Job.Create(
+            "Repair warehouse door",
+            now.AddHours(-3)).Value;
+
+        Assert.True(
+            job.Start(now.AddHours(-2)).IsSuccess);
+
+        Assert.True(
+            job.MarkPendingCloseout(now.AddHours(-1)).IsSuccess);
+
+        await jobs.AddAsync(job);
+
+        var duplicateProofId = Guid.NewGuid();
+
+        var existingCloseout = CloseoutRecord.Rehydrate(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Existing closeout",
+            now.AddMinutes(-30),
+            new[]
+            {
+                ProofItem.Rehydrate(
+                    duplicateProofId,
+                    ProofItemType.Note,
+                    "Existing proof",
+                    now.AddMinutes(-30))
+            });
+
+        await closeouts.AddAsync(existingCloseout);
+
+        database.Context.ChangeTracker.Clear();
+
+        var attemptedCloseout = CloseoutRecord.Rehydrate(
+            Guid.NewGuid(),
+            job.Id,
+            "Attempted closeout",
+            now,
+            new[]
+            {
+                ProofItem.Rehydrate(
+                    duplicateProofId,
+                    ProofItemType.Photo,
+                    "photo://duplicate-proof-id",
+                    now)
+            });
+
+        Assert.True(job.Close(now).IsSuccess);
+
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => persistence.SaveAsync(
+                job,
+                attemptedCloseout));
+
+        database.Context.ChangeTracker.Clear();
+
+        var persistedJob = await jobs.GetByIdAsync(job.Id);
+
+        var persistedAttempt =
+            await closeouts.GetByIdAsync(
+                attemptedCloseout.Id);
+
+        var persistedExisting =
+            await closeouts.GetByIdAsync(
+                existingCloseout.Id);
+
+        Assert.NotNull(persistedJob);
+        Assert.Equal(
+            JobStatus.PendingCloseout,
+            persistedJob!.Status);
+
+        Assert.Null(persistedJob.ClosedAtUtc);
+        Assert.Null(persistedAttempt);
+        Assert.NotNull(persistedExisting);
     }
 
     private static CloseoutRecord CreateCloseout(

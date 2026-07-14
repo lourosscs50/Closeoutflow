@@ -19,6 +19,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IJobRepository, EfJobRepository>();
 builder.Services.AddScoped<ICloseoutRecordRepository, EfCloseoutRecordRepository>();
+builder.Services.AddScoped<ICompleteJobCloseoutPersistence, EfCompleteJobCloseoutPersistence>();
 builder.Services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 builder.Services.AddScoped<CompleteJobCloseoutHandler>();
 

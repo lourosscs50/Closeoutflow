@@ -7,11 +7,13 @@ namespace Closeoutflow.Modules.Closeouts.Tests;
 public sealed class CompleteJobCloseoutHandlerInvariantTests
 {
     [Fact]
-    public async Task Missing_Job_Should_Not_Call_Persistence_Writes()
+    public async Task Missing_Job_Should_Not_Call_Persistence()
     {
         var jobs = new RecordingJobRepository();
-        var closeouts = new RecordingCloseoutRepository();
-        var handler = CreateHandler(jobs, closeouts);
+        var persistence =
+            new RecordingCompleteJobCloseoutPersistence();
+
+        var handler = CreateHandler(jobs, persistence);
 
         var result = await handler.HandleAsync(
             new CompleteJobCloseoutCommand(
@@ -21,20 +23,28 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(JobApplicationErrors.NotFound, result.Error);
-        Assert.Equal(0, jobs.UpdateCalls);
-        Assert.Equal(0, closeouts.AddCalls);
+        Assert.Equal(0, persistence.SaveCalls);
     }
 
     [Fact]
-    public async Task Invalid_Job_Status_Should_Not_Call_Persistence_Writes()
+    public async Task Invalid_Job_Status_Should_Not_Call_Persistence()
     {
         var job = Job.Create(
             "Repair gate motor",
-            new DateTime(2026, 6, 13, 8, 0, 0, DateTimeKind.Utc)).Value;
+            new DateTime(
+                2026,
+                6,
+                13,
+                8,
+                0,
+                0,
+                DateTimeKind.Utc)).Value;
 
         var jobs = new RecordingJobRepository(job);
-        var closeouts = new RecordingCloseoutRepository();
-        var handler = CreateHandler(jobs, closeouts);
+        var persistence =
+            new RecordingCompleteJobCloseoutPersistence();
+
+        var handler = CreateHandler(jobs, persistence);
 
         var result = await handler.HandleAsync(
             new CompleteJobCloseoutCommand(
@@ -43,22 +53,36 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
                 new[] { (ProofItemType.Note, "Verified") }));
 
         Assert.True(result.IsFailure);
-        Assert.Equal(JobApplicationErrors.JobMustBePendingCloseout, result.Error);
+        Assert.Equal(
+            JobApplicationErrors.JobMustBePendingCloseout,
+            result.Error);
+
         Assert.Equal(JobStatus.New, job.Status);
         Assert.Null(job.ClosedAtUtc);
-        Assert.Equal(0, jobs.UpdateCalls);
-        Assert.Equal(0, closeouts.AddCalls);
+        Assert.Equal(0, persistence.SaveCalls);
     }
 
     [Fact]
-    public async Task Invalid_Closeout_Should_Not_Close_Job_Or_Call_Writes()
+    public async Task Invalid_Closeout_Should_Not_Close_Job_Or_Call_Persistence()
     {
-        var now = new DateTime(2026, 6, 14, 8, 0, 0, DateTimeKind.Utc);
-        var job = CreatePendingJob(now);
+        var now = new DateTime(
+            2026,
+            6,
+            14,
+            8,
+            0,
+            0,
+            DateTimeKind.Utc);
 
+        var job = CreatePendingJob(now);
         var jobs = new RecordingJobRepository(job);
-        var closeouts = new RecordingCloseoutRepository();
-        var handler = CreateHandler(jobs, closeouts, now);
+        var persistence =
+            new RecordingCompleteJobCloseoutPersistence();
+
+        var handler = CreateHandler(
+            jobs,
+            persistence,
+            now);
 
         var result = await handler.HandleAsync(
             new CompleteJobCloseoutCommand(
@@ -70,19 +94,30 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
         Assert.Equal(CloseoutErrors.ProofValueRequired, result.Error);
         Assert.Equal(JobStatus.PendingCloseout, job.Status);
         Assert.Null(job.ClosedAtUtc);
-        Assert.Equal(0, jobs.UpdateCalls);
-        Assert.Equal(0, closeouts.AddCalls);
+        Assert.Equal(0, persistence.SaveCalls);
     }
 
     [Fact]
-    public async Task Successful_Closeout_Should_Write_Each_Aggregate_Exactly_Once()
+    public async Task Successful_Closeout_Should_Call_Persistence_Exactly_Once()
     {
-        var now = new DateTime(2026, 6, 15, 8, 0, 0, DateTimeKind.Utc);
-        var job = CreatePendingJob(now);
+        var now = new DateTime(
+            2026,
+            6,
+            15,
+            8,
+            0,
+            0,
+            DateTimeKind.Utc);
 
+        var job = CreatePendingJob(now);
         var jobs = new RecordingJobRepository(job);
-        var closeouts = new RecordingCloseoutRepository();
-        var handler = CreateHandler(jobs, closeouts, now);
+        var persistence =
+            new RecordingCompleteJobCloseoutPersistence();
+
+        var handler = CreateHandler(
+            jobs,
+            persistence,
+            now);
 
         var result = await handler.HandleAsync(
             new CompleteJobCloseoutCommand(
@@ -90,48 +125,76 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
                 "  Completed and inspected  ",
                 new[]
                 {
-                    (ProofItemType.Note, "  Technician verified work  "),
-                    (ProofItemType.Photo, "photo://completed-work")
+                    (
+                        ProofItemType.Note,
+                        "  Technician verified work  "),
+                    (
+                        ProofItemType.Photo,
+                        "photo://completed-work")
                 }));
 
         Assert.True(result.IsSuccess);
         Assert.Equal(JobStatus.Closed, job.Status);
         Assert.Equal(now, job.ClosedAtUtc);
 
-        Assert.Equal(1, jobs.UpdateCalls);
-        Assert.Same(job, jobs.LastUpdatedJob);
+        Assert.Equal(1, persistence.SaveCalls);
+        Assert.Same(job, persistence.LastSavedJob);
 
-        Assert.Equal(1, closeouts.AddCalls);
-        Assert.NotNull(closeouts.LastAddedCloseout);
-        Assert.Equal(result.Value.CloseoutRecordId, closeouts.LastAddedCloseout!.Id);
-        Assert.Equal(job.Id, closeouts.LastAddedCloseout.JobId);
-        Assert.Equal("Completed and inspected", closeouts.LastAddedCloseout.Summary);
-        Assert.Equal(now, closeouts.LastAddedCloseout.CreatedAtUtc);
+        Assert.NotNull(persistence.LastSavedCloseout);
+        Assert.Equal(
+            result.Value.CloseoutRecordId,
+            persistence.LastSavedCloseout!.Id);
+
+        Assert.Equal(
+            job.Id,
+            persistence.LastSavedCloseout.JobId);
+
+        Assert.Equal(
+            "Completed and inspected",
+            persistence.LastSavedCloseout.Summary);
+
+        Assert.Equal(
+            now,
+            persistence.LastSavedCloseout.CreatedAtUtc);
+
         Assert.All(
-            closeouts.LastAddedCloseout.ProofItems,
+            persistence.LastSavedCloseout.ProofItems,
             proof => Assert.Equal(now, proof.CreatedAtUtc));
     }
 
     private static Job CreatePendingJob(DateTime now)
     {
-        var job = Job.Create("Complete service work", now.AddHours(-3)).Value;
+        var job = Job.Create(
+            "Complete service work",
+            now.AddHours(-3)).Value;
 
-        Assert.True(job.Start(now.AddHours(-2)).IsSuccess);
-        Assert.True(job.MarkPendingCloseout(now.AddHours(-1)).IsSuccess);
+        Assert.True(
+            job.Start(now.AddHours(-2)).IsSuccess);
+
+        Assert.True(
+            job.MarkPendingCloseout(now.AddHours(-1)).IsSuccess);
 
         return job;
     }
 
     private static CompleteJobCloseoutHandler CreateHandler(
         RecordingJobRepository jobs,
-        RecordingCloseoutRepository closeouts,
+        RecordingCompleteJobCloseoutPersistence persistence,
         DateTime? now = null)
     {
         return new CompleteJobCloseoutHandler(
             jobs,
-            closeouts,
+            persistence,
             new FixedDateTimeProvider(
-                now ?? new DateTime(2026, 6, 15, 8, 0, 0, DateTimeKind.Utc)));
+                now
+                ?? new DateTime(
+                    2026,
+                    6,
+                    15,
+                    8,
+                    0,
+                    0,
+                    DateTimeKind.Utc)));
     }
 
     private sealed class RecordingJobRepository : IJobRepository
@@ -142,9 +205,6 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
         {
             _job = job;
         }
-
-        internal int UpdateCalls { get; private set; }
-        internal Job? LastUpdatedJob { get; private set; }
 
         public Task<Job?> GetByIdAsync(
             Guid jobId,
@@ -160,7 +220,9 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
             CancellationToken cancellationToken = default)
         {
             IReadOnlyCollection<Job> jobs =
-                _job is null ? Array.Empty<Job>() : new[] { _job };
+                _job is null
+                    ? Array.Empty<Job>()
+                    : new[] { _job };
 
             return Task.FromResult(jobs);
         }
@@ -176,46 +238,27 @@ public sealed class CompleteJobCloseoutHandlerInvariantTests
             Job job,
             CancellationToken cancellationToken = default)
         {
-            UpdateCalls++;
-            LastUpdatedJob = job;
-            return Task.CompletedTask;
+            throw new NotSupportedException();
         }
     }
 
-    private sealed class RecordingCloseoutRepository : ICloseoutRecordRepository
+    private sealed class RecordingCompleteJobCloseoutPersistence
+        : ICompleteJobCloseoutPersistence
     {
-        internal int AddCalls { get; private set; }
-        internal CloseoutRecord? LastAddedCloseout { get; private set; }
+        internal int SaveCalls { get; private set; }
+        internal Job? LastSavedJob { get; private set; }
+        internal CloseoutRecord? LastSavedCloseout { get; private set; }
 
-        public Task AddAsync(
+        public Task SaveAsync(
+            Job job,
             CloseoutRecord closeoutRecord,
             CancellationToken cancellationToken = default)
         {
-            AddCalls++;
-            LastAddedCloseout = closeoutRecord;
+            SaveCalls++;
+            LastSavedJob = job;
+            LastSavedCloseout = closeoutRecord;
+
             return Task.CompletedTask;
-        }
-
-        public Task<CloseoutRecord?> GetByIdAsync(
-            Guid closeoutRecordId,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<CloseoutRecord?>(null);
-        }
-
-        public Task<IReadOnlyCollection<CloseoutRecord>> ListAsync(
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyCollection<CloseoutRecord>>(
-                Array.Empty<CloseoutRecord>());
-        }
-
-        public Task<IReadOnlyCollection<CloseoutRecord>> ListByJobIdAsync(
-            Guid jobId,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyCollection<CloseoutRecord>>(
-                Array.Empty<CloseoutRecord>());
         }
     }
 

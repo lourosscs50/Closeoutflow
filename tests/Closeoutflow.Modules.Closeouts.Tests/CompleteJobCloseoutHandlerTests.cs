@@ -11,8 +11,16 @@ public class CompleteJobCloseoutHandlerTests
     {
         var handler = new CompleteJobCloseoutHandler(
             new FakeJobRepository(),
-            new FakeCloseoutRecordRepository(),
-            new FakeDateTimeProvider(new DateTime(2026, 4, 18, 15, 0, 0, DateTimeKind.Utc)));
+            new FakeCompleteJobCloseoutPersistence(),
+            new FakeDateTimeProvider(
+                new DateTime(
+                    2026,
+                    4,
+                    18,
+                    15,
+                    0,
+                    0,
+                    DateTimeKind.Utc)));
 
         var command = new CompleteJobCloseoutCommand(
             Guid.NewGuid(),
@@ -28,15 +36,25 @@ public class CompleteJobCloseoutHandlerTests
     [Fact]
     public async Task HandleAsync_Should_Fail_When_Job_Is_Not_PendingCloseout()
     {
-        var job = Job.Create("Replace rooftop unit", DateTime.UtcNow).Value;
+        var job = Job.Create(
+            "Replace rooftop unit",
+            DateTime.UtcNow).Value;
 
         var jobRepository = new FakeJobRepository();
         await jobRepository.AddAsync(job);
 
         var handler = new CompleteJobCloseoutHandler(
             jobRepository,
-            new FakeCloseoutRecordRepository(),
-            new FakeDateTimeProvider(new DateTime(2026, 4, 18, 15, 0, 0, DateTimeKind.Utc)));
+            new FakeCompleteJobCloseoutPersistence(),
+            new FakeDateTimeProvider(
+                new DateTime(
+                    2026,
+                    4,
+                    18,
+                    15,
+                    0,
+                    0,
+                    DateTimeKind.Utc)));
 
         var command = new CompleteJobCloseoutCommand(
             job.Id,
@@ -46,25 +64,38 @@ public class CompleteJobCloseoutHandlerTests
         var result = await handler.HandleAsync(command);
 
         Assert.True(result.IsFailure);
-        Assert.Equal(JobApplicationErrors.JobMustBePendingCloseout, result.Error);
+        Assert.Equal(
+            JobApplicationErrors.JobMustBePendingCloseout,
+            result.Error);
     }
 
     [Fact]
     public async Task HandleAsync_Should_Fail_When_Closeout_Proof_Is_Invalid()
     {
-        var job = Job.Create("Replace rooftop unit", DateTime.UtcNow).Value;
+        var job = Job.Create(
+            "Replace rooftop unit",
+            DateTime.UtcNow).Value;
+
         job.Start(DateTime.UtcNow);
         job.MarkPendingCloseout(DateTime.UtcNow);
 
         var jobRepository = new FakeJobRepository();
         await jobRepository.AddAsync(job);
 
-        var closeoutRepository = new FakeCloseoutRecordRepository();
+        var persistence = new FakeCompleteJobCloseoutPersistence();
 
         var handler = new CompleteJobCloseoutHandler(
             jobRepository,
-            closeoutRepository,
-            new FakeDateTimeProvider(new DateTime(2026, 4, 18, 15, 0, 0, DateTimeKind.Utc)));
+            persistence,
+            new FakeDateTimeProvider(
+                new DateTime(
+                    2026,
+                    4,
+                    18,
+                    15,
+                    0,
+                    0,
+                    DateTimeKind.Utc)));
 
         var command = new CompleteJobCloseoutCommand(
             job.Id,
@@ -77,26 +108,36 @@ public class CompleteJobCloseoutHandlerTests
         Assert.Equal(CloseoutErrors.ProofValueRequired, result.Error);
         Assert.Equal(JobStatus.PendingCloseout, job.Status);
         Assert.Null(job.ClosedAtUtc);
-        Assert.Empty(closeoutRepository.Items);
+        Assert.Empty(persistence.Items);
     }
 
     [Fact]
     public async Task HandleAsync_Should_Create_Closeout_And_Close_Job_When_Input_Is_Valid()
     {
-        var now = new DateTime(2026, 4, 18, 15, 0, 0, DateTimeKind.Utc);
+        var now = new DateTime(
+            2026,
+            4,
+            18,
+            15,
+            0,
+            0,
+            DateTimeKind.Utc);
 
-        var job = Job.Create("Replace rooftop unit", now.AddHours(-2)).Value;
+        var job = Job.Create(
+            "Replace rooftop unit",
+            now.AddHours(-2)).Value;
+
         job.Start(now.AddHours(-1));
         job.MarkPendingCloseout(now.AddMinutes(-30));
 
         var jobRepository = new FakeJobRepository();
         await jobRepository.AddAsync(job);
 
-        var closeoutRepository = new FakeCloseoutRecordRepository();
+        var persistence = new FakeCompleteJobCloseoutPersistence();
 
         var handler = new CompleteJobCloseoutHandler(
             jobRepository,
-            closeoutRepository,
+            persistence,
             new FakeDateTimeProvider(now));
 
         var command = new CompleteJobCloseoutCommand(
@@ -105,7 +146,9 @@ public class CompleteJobCloseoutHandlerTests
             new[]
             {
                 (ProofItemType.Note, "All tasks finished"),
-                (ProofItemType.Photo, "https://example.com/proof.jpg")
+                (
+                    ProofItemType.Photo,
+                    "https://example.com/proof.jpg")
             });
 
         var result = await handler.HandleAsync(command);
@@ -117,25 +160,37 @@ public class CompleteJobCloseoutHandlerTests
         Assert.Equal(JobStatus.Closed, job.Status);
         Assert.Equal(now, job.ClosedAtUtc);
 
-        Assert.Single(closeoutRepository.Items);
-        Assert.Equal(job.Id, closeoutRepository.Items.Single().JobId);
+        Assert.Single(persistence.Items);
+        Assert.Equal(job.Id, persistence.Items.Single().JobId);
     }
+
     [Fact]
     public async Task HandleAsync_Should_Fail_When_Proof_Items_Are_Null()
     {
-        var job = Job.Create("Replace rooftop unit", DateTime.UtcNow).Value;
+        var job = Job.Create(
+            "Replace rooftop unit",
+            DateTime.UtcNow).Value;
+
         job.Start(DateTime.UtcNow);
         job.MarkPendingCloseout(DateTime.UtcNow);
 
         var jobRepository = new FakeJobRepository();
         await jobRepository.AddAsync(job);
 
-        var closeoutRepository = new FakeCloseoutRecordRepository();
+        var persistence = new FakeCompleteJobCloseoutPersistence();
 
         var handler = new CompleteJobCloseoutHandler(
             jobRepository,
-            closeoutRepository,
-            new FakeDateTimeProvider(new DateTime(2026, 4, 18, 15, 0, 0, DateTimeKind.Utc)));
+            persistence,
+            new FakeDateTimeProvider(
+                new DateTime(
+                    2026,
+                    4,
+                    18,
+                    15,
+                    0,
+                    0,
+                    DateTimeKind.Utc)));
 
         var command = new CompleteJobCloseoutCommand(
             job.Id,
@@ -148,21 +203,24 @@ public class CompleteJobCloseoutHandlerTests
         Assert.Equal(CloseoutErrors.ProofRequired, result.Error);
         Assert.Equal(JobStatus.PendingCloseout, job.Status);
         Assert.Null(job.ClosedAtUtc);
-        Assert.Empty(closeoutRepository.Items);
+        Assert.Empty(persistence.Items);
     }
-
 }
 
 internal sealed class FakeJobRepository : IJobRepository
 {
     private readonly List<Job> _jobs = new();
 
-    public Task<Job?> GetByIdAsync(Guid jobId, CancellationToken cancellationToken = default)
+    public Task<Job?> GetByIdAsync(
+        Guid jobId,
+        CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(_jobs.SingleOrDefault(x => x.Id == jobId));
+        return Task.FromResult(
+            _jobs.SingleOrDefault(x => x.Id == jobId));
     }
 
-    public Task<IReadOnlyCollection<Job>> ListAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyCollection<Job>> ListAsync(
+        CancellationToken cancellationToken = default)
     {
         IReadOnlyCollection<Job> jobs = _jobs
             .OrderByDescending(x => x.CreatedAtUtc)
@@ -171,52 +229,34 @@ internal sealed class FakeJobRepository : IJobRepository
         return Task.FromResult(jobs);
     }
 
-    public Task AddAsync(Job job, CancellationToken cancellationToken = default)
+    public Task AddAsync(
+        Job job,
+        CancellationToken cancellationToken = default)
     {
         _jobs.Add(job);
         return Task.CompletedTask;
     }
 
-    public Task UpdateAsync(Job job, CancellationToken cancellationToken = default)
+    public Task UpdateAsync(
+        Job job,
+        CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
     }
 }
 
-internal sealed class FakeCloseoutRecordRepository : ICloseoutRecordRepository
+internal sealed class FakeCompleteJobCloseoutPersistence
+    : ICompleteJobCloseoutPersistence
 {
     public List<CloseoutRecord> Items { get; } = new();
 
-    public Task AddAsync(CloseoutRecord closeoutRecord, CancellationToken cancellationToken = default)
+    public Task SaveAsync(
+        Job job,
+        CloseoutRecord closeoutRecord,
+        CancellationToken cancellationToken = default)
     {
         Items.Add(closeoutRecord);
         return Task.CompletedTask;
-    }
-
-    public Task<CloseoutRecord?> GetByIdAsync(Guid closeoutRecordId, CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(Items.SingleOrDefault(x => x.Id == closeoutRecordId));
-    }
-
-    public Task<IReadOnlyCollection<CloseoutRecord>> ListAsync(CancellationToken cancellationToken = default)
-    {
-        IReadOnlyCollection<CloseoutRecord> records = Items
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .ToArray();
-
-        return Task.FromResult(records);
-    }
-
-    public Task<IReadOnlyCollection<CloseoutRecord>> ListByJobIdAsync(
-        Guid jobId,
-        CancellationToken cancellationToken = default)
-    {
-        IReadOnlyCollection<CloseoutRecord> records = Items
-            .Where(x => x.JobId == jobId)
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .ToArray();
-
-        return Task.FromResult(records);
     }
 }
 
