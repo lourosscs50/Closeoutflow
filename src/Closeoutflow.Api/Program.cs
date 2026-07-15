@@ -176,7 +176,7 @@ app.MapPost("/jobs/{id:guid}/closeout", async (
 
     if (result.IsFailure)
     {
-        return Results.BadRequest(ToErrorResponse(result.Error));
+        return ToCompleteJobCloseoutFailure(result.Error);
     }
 
     return Results.Ok(new CompleteJobCloseoutResponse(
@@ -247,6 +247,18 @@ static JobStatusResponse ToJobStatusResponse(Job job)
     return new JobStatusResponse(
         job.Id,
         job.Status.ToString());
+}
+
+static IResult ToCompleteJobCloseoutFailure(Error error)
+{
+    var response = ToErrorResponse(error);
+
+    if (error.Code == CloseoutErrors.AlreadyExistsForJob.Code)
+    {
+        return Results.Conflict(response);
+    }
+
+    return Results.BadRequest(response);
 }
 
 static ErrorResponse ToErrorResponse(Error error)
